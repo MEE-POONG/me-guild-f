@@ -21,7 +21,7 @@ export function SiteControls({ compact = false }: { compact?: boolean }) {
       {siteLocales.map((code) => <option key={code} value={code}>{compact ? localeMeta[code].label : `${localeMeta[code].short} · ${localeMeta[code].label}`}</option>)}
     </select>
     <button type="button" className="site-theme-toggle" onClick={() => setColorMode(nextMode)} aria-label={nextMode === "light" ? copy.light : copy.dark} title={nextMode === "light" ? copy.light : copy.dark}>
-      {colorMode === "dark" ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+      {colorMode === "dark" ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}
     </button>
   </div>;
 }
