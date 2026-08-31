@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// Profile collections are intentionally separate from the legacy UserDB collection.
+// OAuth users are linked by ownerEmail until the legacy user service exposes a stable ID.
+model MemberProfile {
+  id           String               @id @default(auto()) @map("_id") @db.ObjectId
+  ownerEmail   String               @unique
+  slug         String               @unique
+  displayName  String
+  headline     String?
+  bio          String?
+  avatarUrl    String?
+  bannerUrl    String?
+  location     String?
+  websiteUrl   String?
+  statusText   String?
+  isPublic     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  preference   MemberPreference?
+  sections     ProfileSection[]
+  songs        ProfileSong[]
+  foods        ProfileFood[]
+  achievements ProfileAchievement[]
+  customItems  ProfileCustomItem[]
+
+  @@map("MeGuildMemberProfile")
+}
+
+model MemberPreference {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  profileId         String        @unique @db.ObjectId
+  profile           MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  locale            SiteLocale    @default(TH)
+  colorMode         ColorMode     @default(DARK)
+  profileTheme      ProfileTheme  @default(NEON)
+  showLocaleBadge   Boolean       @default(true)
+  autoplayMusic     Boolean       @default(false)
+  reducedMotion     Boolean       @default(false)
+  compactNavigation Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@map("MeGuildMemberPreference")
+}
+
+model ProfileSection {
+  id        String             @id @default(auto()) @map("_id") @db.ObjectId
+  profileId String             @db.ObjectId
+  profile   MemberProfile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  type      ProfileSectionType
+  title     String?
+  isVisible Boolean            @default(true)
+  position  Int                @default(0)
+  layout    DisplayLayout      @default(GRID)
+  settings  Json?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([profileId, type])
+  @@index([profileId, position])
+  @@map("MeGuildProfileSection")
+}
+
+model ProfileSong {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  profileId   String        @db.ObjectId
+  profile     MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  artist      String
+  album       String?
+  artworkUrl  String?
+  externalUrl String?
+  previewUrl  String?
+  provider    String?
+  accentColor String?
+  position    Int           @default(0)
+  isVisible   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([profileId, position])
+  @@map("MeGuildProfileSong")
+}
+
+model ProfileFood {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  profileId   String        @db.ObjectId
+  profile     MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name        String
+  cuisine     String?
+  description String?
+  imageUrl    String?
+  rating      Int?
+  position    Int           @default(0)
+  isVisible   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([profileId, position])
+  @@map("MeGuildProfileFood")
+}
+
+model ProfileAchievement {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  profileId   String        @db.ObjectId
+  profile     MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  icon        String?
+  imageUrl    String?
+  rarity      String?
+  source      String?
+  isVerified  Boolean       @default(false)
+  unlockedAt  DateTime?
+  position    Int           @default(0)
+  isVisible   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([profileId, position])
+  @@map("MeGuildProfileAchievement")
+}
+
+model ProfileCustomItem {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  profileId   String        @db.ObjectId
+  profile     MemberProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  category    String
+  title       String
+  subtitle    String?
+  description String?
+  imageUrl    String?
+  externalUrl String?
+  metadata    Json?
+  position    Int           @default(0)
+  isVisible   Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([profileId, category, position])
+  @@map("MeGuildProfileCustomItem")
+}
+
+enum SiteLocale {
+  TH
+  ZH
+  EN
+  JA
+}
+
+enum ColorMode {
+  LIGHT
+  DARK
+}
+
+enum ProfileTheme {
+  NEON
+  SAKURA
+  ARCADE
+  MINIMAL
+  FANTASY
+}
+
+enum ProfileSectionType {
+  ABOUT
+  GAMES
+  MUSIC
+  ACHIEVEMENTS
+  FOOD
+  GUILDS
+  ACTIVITY
+  CUSTOM
+}
+
+enum DisplayLayout {
+  GRID
+  LIST
+  STACK
+  BENTO
+  TIMELINE
+  VINYL
+  CASSETTE
+  RETRO_PLAYER
+  TROPHY_CASE
+  COMPACT
+  MARQUEE
+}
