@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "@/components/icons";
 import { localeMeta, siteLocales, type SiteLocale } from "@/lib/preferences";
 import { useAppPreferences } from "@/components/app-preferences-provider";
 
@@ -25,3 +25,4 @@ export function SiteControls({ compact = false }: { compact?: boolean }) {
     </button>
   </div>;
 }
+

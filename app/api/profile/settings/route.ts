@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { mutationError, readJsonBody } from "@/lib/member-security";
 
 const localeValues = new Set(Object.values(SiteLocale));
 const modeValues = new Set(Object.values(ColorMode));
@@ -24,6 +25,12 @@ function optionalText(value: unknown, maxLength: number) {
 function requiredText(value: unknown, fallback: string, maxLength: number) {
   const text = optionalText(value, maxLength);
   return typeof text === "string" ? text : fallback;
+}
+
+function optionalUrl(value: unknown) {
+  const text = optionalText(value, 500);
+  if (!text) return text;
+  try { const url = new URL(text); return ["https:", "http:"].includes(url.protocol) ? url.href : null; } catch { return null; }
 }
 
 function enumValue<T extends string>(value: unknown, values: Set<T>) {
@@ -54,47 +61,57 @@ async function getProfile(email: string) {
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user?.id || !session.user.email) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   const profile = await getProfile(session.user.email.toLowerCase());
-  return Response.json({ profile });
+  if (profile?.identityId && profile.identityId !== session.user.id) return Response.json({ error: "PROFILE_OWNERSHIP_CONFLICT" }, { status: 409 });
+  return Response.json({ profile }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user?.id || !session.user.email) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401 });
 
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return Response.json({ error: "INVALID_ORIGIN" }, { status: 403 });
-  if (!request.headers.get("content-type")?.includes("application/json")) return Response.json({ error: "JSON_REQUIRED" }, { status: 415 });
+  const error = mutationError(request);
+  if (error) return Response.json({ error }, { status: error === "JSON_REQUIRED" ? 415 : 403 });
 
-  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  const body = await readJsonBody(request).catch(() => null);
   if (!body || typeof body !== "object") return Response.json({ error: "INVALID_BODY" }, { status: 400 });
 
   const email = session.user.email.toLowerCase();
+  const identityId = session.user.id;
+  const sessionImage = session.user.image;
+  const existing = await getProfile(email);
+  if (existing?.identityId && existing.identityId !== identityId) return Response.json({ error: "PROFILE_OWNERSHIP_CONFLICT" }, { status: 409 });
   const profileInput = typeof body.profile === "object" && body.profile ? body.profile as Record<string, unknown> : {};
   const preferenceInput = typeof body.preferences === "object" && body.preferences ? body.preferences as Record<string, unknown> : {};
   const displayName = requiredText(profileInput.displayName, session.user.name ?? email.split("@")[0], 80);
 
-  const profile = await prisma.memberProfile.upsert({
+  try {
+  await prisma.$transaction(async (tx) => {
+  const profile = await tx.memberProfile.upsert({
     where: { ownerEmail: email },
     create: {
       ownerEmail: email,
+      identityId,
       slug: makeSlug(email, displayName),
       displayName,
       headline: optionalText(profileInput.headline, 120),
       bio: optionalText(profileInput.bio, 500),
-      avatarUrl: optionalText(profileInput.avatarUrl, 500) ?? session.user.image,
-      bannerUrl: optionalText(profileInput.bannerUrl, 500),
+      avatarUrl: optionalUrl(profileInput.avatarUrl) ?? sessionImage,
+      bannerUrl: optionalUrl(profileInput.bannerUrl),
       location: optionalText(profileInput.location, 100),
-      websiteUrl: optionalText(profileInput.websiteUrl, 500),
+      websiteUrl: optionalUrl(profileInput.websiteUrl),
       statusText: optionalText(profileInput.statusText, 100),
     },
     update: {
+      identityId,
       ...(profileInput.displayName !== undefined ? { displayName } : {}),
       ...(profileInput.headline !== undefined ? { headline: optionalText(profileInput.headline, 120) } : {}),
       ...(profileInput.bio !== undefined ? { bio: optionalText(profileInput.bio, 500) } : {}),
+      ...(profileInput.avatarUrl !== undefined ? { avatarUrl: optionalUrl(profileInput.avatarUrl) } : {}),
+      ...(profileInput.bannerUrl !== undefined ? { bannerUrl: optionalUrl(profileInput.bannerUrl) } : {}),
       ...(profileInput.location !== undefined ? { location: optionalText(profileInput.location, 100) } : {}),
-      ...(profileInput.websiteUrl !== undefined ? { websiteUrl: optionalText(profileInput.websiteUrl, 500) } : {}),
+      ...(profileInput.websiteUrl !== undefined ? { websiteUrl: optionalUrl(profileInput.websiteUrl) } : {}),
       ...(profileInput.statusText !== undefined ? { statusText: optionalText(profileInput.statusText, 100) } : {}),
     },
   });
@@ -102,7 +119,8 @@ export async function PUT(request: Request) {
   const locale = enumValue(preferenceInput.locale, localeValues);
   const colorMode = enumValue(preferenceInput.colorMode, modeValues);
   const profileTheme = enumValue(preferenceInput.profileTheme, themeValues);
-  await prisma.memberPreference.upsert({
+  await tx.memberIdentity.update({ where: { id: identityId }, data: { displayName, ...(profileInput.avatarUrl !== undefined ? { avatarUrl: optionalUrl(profileInput.avatarUrl) } : {}) } });
+  await tx.memberPreference.upsert({
     where: { profileId: profile.id },
     create: {
       profileId: profile.id,
@@ -127,7 +145,7 @@ export async function PUT(request: Request) {
       const type = enumValue(input.type, sectionValues);
       const layout = enumValue(input.layout, layoutValues);
       if (!type || !layout) continue;
-      await prisma.profileSection.upsert({
+      await tx.profileSection.upsert({
         where: { profileId_type: { profileId: profile.id, type } },
         create: { profileId: profile.id, type, layout, position, isVisible: input.isVisible !== false, title: optionalText(input.title, 80) },
         update: { layout, position, isVisible: input.isVisible !== false, title: optionalText(input.title, 80) },
@@ -136,41 +154,43 @@ export async function PUT(request: Request) {
   }
 
   if (Array.isArray(body.songs)) {
-    await prisma.profileSong.deleteMany({ where: { profileId: profile.id } });
+    await tx.profileSong.deleteMany({ where: { profileId: profile.id } });
     const songs = body.songs.slice(0, 20).flatMap((value, position) => {
       if (!value || typeof value !== "object") return [];
       const input = value as Record<string, unknown>;
       const title = optionalText(input.title, 120);
       const artist = optionalText(input.artist, 120);
       if (!title || !artist) return [];
-      return [{ profileId: profile.id, title, artist, album: optionalText(input.album, 120), artworkUrl: optionalText(input.artworkUrl, 500), externalUrl: optionalText(input.externalUrl, 500), position }];
+      return [{ profileId: profile.id, title, artist, album: optionalText(input.album, 120), artworkUrl: optionalUrl(input.artworkUrl), externalUrl: optionalUrl(input.externalUrl), position }];
     });
-    if (songs.length) await prisma.profileSong.createMany({ data: songs });
+    if (songs.length) await tx.profileSong.createMany({ data: songs });
   }
 
   if (Array.isArray(body.foods)) {
-    await prisma.profileFood.deleteMany({ where: { profileId: profile.id } });
+    await tx.profileFood.deleteMany({ where: { profileId: profile.id } });
     const foods = body.foods.slice(0, 20).flatMap((value, position) => {
       if (!value || typeof value !== "object") return [];
       const input = value as Record<string, unknown>;
       const name = optionalText(input.name, 120);
       if (!name) return [];
-      return [{ profileId: profile.id, name, cuisine: optionalText(input.cuisine, 80), description: optionalText(input.description, 300), imageUrl: optionalText(input.imageUrl, 500), position }];
+      return [{ profileId: profile.id, name, cuisine: optionalText(input.cuisine, 80), description: optionalText(input.description, 300), imageUrl: optionalUrl(input.imageUrl), position }];
     });
-    if (foods.length) await prisma.profileFood.createMany({ data: foods });
+    if (foods.length) await tx.profileFood.createMany({ data: foods });
   }
 
   if (Array.isArray(body.customItems)) {
-    await prisma.profileCustomItem.deleteMany({ where: { profileId: profile.id } });
+    await tx.profileCustomItem.deleteMany({ where: { profileId: profile.id } });
     const customItems = body.customItems.slice(0, 30).flatMap((value, position) => {
       if (!value || typeof value !== "object") return [];
       const input = value as Record<string, unknown>;
       const title = optionalText(input.title, 120);
       if (!title) return [];
-      return [{ profileId: profile.id, category: requiredText(input.category, "OTHER", 60), title, subtitle: optionalText(input.subtitle, 120), description: optionalText(input.description, 300), imageUrl: optionalText(input.imageUrl, 500), externalUrl: optionalText(input.externalUrl, 500), position }];
+      return [{ profileId: profile.id, category: requiredText(input.category, "OTHER", 60), title, subtitle: optionalText(input.subtitle, 120), description: optionalText(input.description, 300), imageUrl: optionalUrl(input.imageUrl), externalUrl: optionalUrl(input.externalUrl), position }];
     });
-    if (customItems.length) await prisma.profileCustomItem.createMany({ data: customItems });
+    if (customItems.length) await tx.profileCustomItem.createMany({ data: customItems });
   }
+  });
+  } catch { return Response.json({ error: "PROFILE_SAVE_FAILED" }, { status: 503 }); }
 
-  return Response.json({ profile: await getProfile(email) });
+  return Response.json({ profile: await getProfile(email) }, { headers: { "Cache-Control": "no-store" } });
 }

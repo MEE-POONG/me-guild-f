@@ -24,7 +24,7 @@ import {
   UserRoundPlus,
   UsersRound,
   Zap,
-} from "lucide-react";
+} from "@/components/icons";
 import { BrandMark } from "@/components/brand-mark";
 import { GuildRetreatImage } from "@/components/guild-retreat-image";
 import { InteractiveGuildCrest } from "@/components/interactive-guild-crest";
@@ -88,7 +88,8 @@ export default async function Home() {
 
             <details className={styles.mobileMenu}>
               <summary aria-label={text.menu}>
-                <span aria-hidden="true"><i /><i /><i /></span>
+                <span aria-hidden="true"><i /><i /><i />
+                </span>
               </summary>
               <div className={styles.mobileMenuPanel}>
                 <SiteControls compact />
@@ -148,7 +149,8 @@ export default async function Home() {
             <div className={styles.shell}>
               <details className={styles.partyDock}>
                 <summary className={styles.partyDockSummary}>
-                  <span className={styles.boardIcon}><Gamepad2 size={21} aria-hidden="true" /></span>
+                  <span className={styles.boardIcon}><Gamepad2 size={21} aria-hidden="true" />
+                  </span>
                   <span className={styles.partyDockCopy}>
                     <small>PARTY NOTICE</small>
                     <strong>{text.commandSubtitle}</strong>
@@ -162,14 +164,16 @@ export default async function Home() {
                   <div className={styles.readiness}>
                     <span>{text.partyReadiness}</span>
                     <strong>80%</strong>
-                    <div className={styles.progressTrack} aria-hidden="true"><i /></div>
+                    <div className={styles.progressTrack} aria-hidden="true"><i />
+                    </div>
                   </div>
 
                   <div className={styles.partyMembers} aria-label={text.partyMembersAria}>
                     {["AK", "N", "BB", "M"].map((name, index) => (
                       <span key={name} className={index === 0 ? styles.partyLeader : undefined}>{name}</span>
                     ))}
-                    <span><UserRoundPlus size={18} aria-hidden="true" /></span>
+                    <span><UserRoundPlus size={18} aria-hidden="true" />
+                    </span>
                   </div>
 
                   <dl className={styles.matchDetails}>
@@ -217,7 +221,8 @@ export default async function Home() {
                 const Icon = loopIcons[index];
                 return (
                   <li key={item.title}>
-                    <span className={styles.journeyIcon}><Icon size={22} aria-hidden="true" /></span>
+                    <span className={styles.journeyIcon}><Icon size={22} aria-hidden="true" />
+                    </span>
                     <small>0{index + 1}</small>
                     <h3>{item.title}</h3>
                     <p>{item.body}</p>
@@ -234,7 +239,8 @@ export default async function Home() {
                   <p className={styles.kicker}>LIVE QUEST BOARD</p>
                   <h2>{text.partyHeading[0]}<br /><span>{text.partyHeading[1]}</span></h2>
                 </div>
-                <Link href={memberHref} className={styles.textLink}>{text.viewAll}<ArrowRight size={17} aria-hidden="true" /></Link>
+                <Link href={memberHref} className={styles.textLink}>{text.viewAll}<ArrowRight size={17} aria-hidden="true" />
+                </Link>
               </div>
 
               <div className={styles.partyGrid}>
@@ -253,7 +259,8 @@ export default async function Home() {
                         <div><dt>{text.members}</dt><dd>{party.slots}</dd></div>
                         <div><dt>{text.time}</dt><dd>{localized.time}</dd></div>
                       </dl>
-                      <Link href={memberHref}>{text.requestJoin}<ChevronRight size={16} aria-hidden="true" /></Link>
+                      <Link href={memberHref}>{text.requestJoin}<ChevronRight size={16} aria-hidden="true" />
+                      </Link>
                     </article>
                   );
                 })}
@@ -297,7 +304,8 @@ export default async function Home() {
                 <p className={styles.kicker}>SEASONAL FESTIVAL</p>
                 <h2>GUILD CLASH<br /><span>THAILAND</span></h2>
                 <p>{text.eventDescription}</p>
-                <Link href={memberHref} className={styles.primaryButton}>{text.registerTeam}<ArrowRight size={17} aria-hidden="true" /></Link>
+                <Link href={memberHref} className={styles.primaryButton}>{text.registerTeam}<ArrowRight size={17} aria-hidden="true" />
+                </Link>
               </div>
 
               <article className={styles.eventCard}>
@@ -323,7 +331,8 @@ export default async function Home() {
 
           <section className={`${styles.shell} ${styles.ctaSection}`}>
             <div className={styles.ctaPanel}>
-              <div className={styles.ctaLeaves} aria-hidden="true"><Leaf /><Leaf /><Sparkles /></div>
+              <div className={styles.ctaLeaves} aria-hidden="true"><Leaf /><Leaf /><Sparkles />
+              </div>
               <div>
                 <p className={styles.kicker}>YOUR STORY STARTS HERE</p>
                 <h2>{text.ctaHeading[0]}<br />{text.ctaHeading[1]}</h2>
@@ -347,3 +356,4 @@ export default async function Home() {
     </main>
   );
 }
+
