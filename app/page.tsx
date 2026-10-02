@@ -78,7 +78,7 @@ export default async function Home() {
             </nav>
 
             <div className={styles.headerActions}>
-              <SiteControls />
+              <SiteControls persistToAccount={Boolean(session?.user)} />
               <Link href="/profile" className={styles.quietButton}>{text.profileStudio}</Link>
               <Link href={memberHref} className={styles.primaryButton}>
                 {session ? text.openHub : text.joinCommunity}
@@ -92,7 +92,7 @@ export default async function Home() {
                 </span>
               </summary>
               <div className={styles.mobileMenuPanel}>
-                <SiteControls compact />
+                <SiteControls compact persistToAccount={Boolean(session?.user)} />
                 <nav aria-label={text.menu}>
                   <Link href="#parties">{text.nav[0]}</Link>
                   <Link href="#guilds">{text.nav[1]}</Link>
@@ -356,4 +356,3 @@ export default async function Home() {
     </main>
   );
 }
-

@@ -7,8 +7,8 @@ import { localeMeta, type ColorMode, type SiteLocale } from "@/lib/preferences";
 type PreferencesContextValue = {
   locale: SiteLocale;
   colorMode: ColorMode;
-  setLocale: (locale: SiteLocale) => void;
-  setColorMode: (mode: ColorMode) => void;
+  setLocale: (locale: SiteLocale, persistToAccount: boolean) => void;
+  setColorMode: (mode: ColorMode, persistToAccount: boolean) => void;
 };
 
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
@@ -35,21 +35,21 @@ export function AppPreferencesProvider({ initialLocale, initialColorMode, childr
   const value = useMemo<PreferencesContextValue>(() => ({
     locale,
     colorMode,
-    setLocale(nextLocale) {
+    setLocale(nextLocale, persistToAccount) {
       updateLocale(nextLocale);
       document.cookie = `mg_locale=${nextLocale}; Path=/; Max-Age=31536000; SameSite=Lax`;
       document.documentElement.lang = localeMeta[nextLocale].htmlLang;
       localStorage.setItem("mg_locale", nextLocale);
-      persistPreference({ locale: nextLocale });
+      if (persistToAccount) persistPreference({ locale: nextLocale });
       router.refresh();
     },
-    setColorMode(nextMode) {
+    setColorMode(nextMode, persistToAccount) {
       updateColorMode(nextMode);
       document.documentElement.dataset.colorMode = nextMode;
       document.documentElement.style.colorScheme = nextMode;
       document.cookie = `mg_color_mode=${nextMode}; Path=/; Max-Age=31536000; SameSite=Lax`;
       localStorage.setItem("mg_color_mode", nextMode);
-      persistPreference({ colorMode: nextMode });
+      if (persistToAccount) persistPreference({ colorMode: nextMode });
     },
   }), [colorMode, locale, router]);
 

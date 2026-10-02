@@ -25,7 +25,7 @@ export default async function MemberPage() {
   const firstName = session.user.name?.split(" ")[0] ?? "Player";
 
   return <main className="min-h-dvh bg-ink text-white">
-    <header className="border-b border-white/8 bg-[#0b0e14]"><div className="shell flex min-h-20 items-center justify-between gap-3"><Link href="/" className="flex items-center gap-3"><BrandMark /><span className="hidden font-display font-bold tracking-[.13em] sm:inline">ME GUILD</span></Link><div className="flex items-center gap-2"><SiteControls compact /><div className="hidden text-right md:block"><p className="text-sm font-semibold">{session.user.name}</p><p className="text-xs text-white/35">{session.user.provider ?? "member"}</p></div><div className="grid size-11 place-items-center rounded-xl bg-violet/15 font-display font-bold text-violet">{firstName.slice(0, 2).toUpperCase()}</div><SignOutButton label={text.signOut} />
+    <header className="border-b border-white/8 bg-[#0b0e14]"><div className="shell flex min-h-20 items-center justify-between gap-3"><Link href="/" className="flex items-center gap-3"><BrandMark /><span className="hidden font-display font-bold tracking-[.13em] sm:inline">ME GUILD</span></Link><div className="flex items-center gap-2"><SiteControls compact persistToAccount /><div className="hidden text-right md:block"><p className="text-sm font-semibold">{session.user.name}</p><p className="text-xs text-white/35">{session.user.provider ?? "member"}</p></div><div className="grid size-11 place-items-center rounded-xl bg-violet/15 font-display font-bold text-violet">{firstName.slice(0, 2).toUpperCase()}</div><SignOutButton label={text.signOut} />
     </div></div></header>
     <div className="shell py-10 md:py-14"><div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between"><div><p className="kicker">MEMBER HUB</p><h1 className="mt-3 font-display text-4xl font-bold md:text-6xl">{text.welcome}, <span className="text-lime">{firstName}</span></h1><p className="mt-3 text-white/45">{text.intro}</p></div><Link href="/" className="button-ghost">{text.community} <ArrowRight size={17} />
     </Link></div>
@@ -41,4 +41,3 @@ export default async function MemberPage() {
     </div>
   </main>;
 }
-

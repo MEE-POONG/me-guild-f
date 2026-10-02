@@ -199,7 +199,7 @@ export function ProfileStudio({ signedIn, initialName, initialAvatar }: { signed
 
   return <main className="profile-studio">
     <header className="studio-topbar"><div className="flex items-center gap-3"><Link href={signedIn ? "/member" : "/"} className="studio-icon-button" aria-label={text.back}><ArrowLeft size={18} />
-    </Link><div><p className="font-display text-sm font-bold tracking-[.08em]">{text.studio}</p><p className="text-[.66rem] opacity-55">{text.live}</p></div></div><div className="flex items-center gap-2"><SiteControls /><button type="submit" form="profile-settings-form" className="studio-save"><Save size={16} /><span className="hidden sm:inline">{status === "saving" ? text.saving : text.save}</span></button></div></header>
+    </Link><div><p className="font-display text-sm font-bold tracking-[.08em]">{text.studio}</p><p className="text-[.66rem] opacity-55">{text.live}</p></div></div><div className="flex items-center gap-2"><SiteControls persistToAccount={signedIn} /><button type="submit" form="profile-settings-form" className="studio-save"><Save size={16} /><span className="hidden sm:inline">{status === "saving" ? text.saving : text.save}</span></button></div></header>
     <div className="studio-layout">
       <form id="profile-settings-form" method="post" onSubmit={saveProfile} className="studio-editor">
         <div className="studio-intro"><span className="studio-step">01</span><div><h1>{text.basics}</h1><p>{text.displayLanguage}</p></div></div>
@@ -235,4 +235,3 @@ export function ProfileStudio({ signedIn, initialName, initialAvatar }: { signed
     </div>
   </main>;
 }
-

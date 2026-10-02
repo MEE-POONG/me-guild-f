@@ -91,14 +91,17 @@ model CommentDB {
 
 // โค้ดแพ็คเกจ - เก็บโค้ดสำหรับเติมวันใช้งาน
 model PackageCodeDB {
-  id        String    @id @default(auto()) @map("_id") @db.ObjectId
-  code      String    @unique // รหัสโค้ด
-  days      Int // จำนวนวันที่ได้รับ
-  isUsed    Boolean   @default(false) // ถูกใช้ไปหรือยัง
-  usedBy    String? // ID เซิร์ฟเวอร์ที่ใช้ (Discord Guild ID)
-  usedAt    DateTime? // เวลาที่ใช้
-  createdAt DateTime  @default(now())
-  createdBy String?
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  code       String    @unique // รหัสโค้ด
+  days       Int // จำนวนวันที่ได้รับ
+  isUsed     Boolean   @default(false) // ถูกใช้ไปหรือยัง
+  discord_id String?   @map("usedBy") // Discord Guild ID ที่ใช้โค้ด (เก็บในฟิลด์เดิมเพื่อรักษาข้อมูล)
+  server     ServerDB? @relation(fields: [discord_id], references: [serverId])
+  usedAt     DateTime? // เวลาที่ใช้
+  createdAt  DateTime  @default(now())
+  createdBy  String?
+
+  @@index([discord_id])
 }
 
 // ========================================
@@ -144,9 +147,13 @@ model GameOnlineDB {
   shortName            String? // คำย่อชื่อเกม
   logo                 String? // URL โลโก้เกมล่าสุดจาก me-db
   logoFile             StoredDecorationImage? // metadata ไฟล์โลโก้ล่าสุดจาก me-db
+  banner               String? // URL ภาพแบนเนอร์แนวนอนสำหรับแสดงในส่วนอื่น
+  bannerFile           StoredDecorationImage? // metadata ไฟล์แบนเนอร์ล่าสุดจาก me-db
   numberMatch          String? // จำนวนแมทช์
   partyLimit           Int // จำนวนผู้เล่นสูงสุดต่อปาร์ตี้
   ranking              Boolean // มีระบบแรงค์หรือไม่
+  popularityRank       Int? // อันดับความนิยมล่าสุด (เลขน้อยนิยมมากกว่า)
+  popularityAsOf       DateTime?              @db.Date // วันที่อ้างอิงอันดับความนิยม
   categoryIds          String[]               @default([]) @db.ObjectId // Categories/แท็กที่ติดกับเกมโดยตรง
   createdAt            DateTime               @db.Date
   createdBy            String?
@@ -217,6 +224,12 @@ model GameTypeDB {
   deleteBy     String
   // ความสัมพันธ์ many-to-many ผ่าน GameTypeGame
   gameTypeGame GameTypeGame[] @relation("GameTypeToGameTypeGame")
+  titleTh       String? // ชื่อภาษาไทย
+  titleEn       String? // ชื่อภาษาอังกฤษ
+  descriptionTh String? // คำอธิบายภาษาไทย
+  descriptionEn String? // คำอธิบายภาษาอังกฤษ
+  logoUrl       String? // URL โลโก้ล่าสุดจาก me-db
+  logoFile      StoredDecorationImage? // metadata ไฟล์โลโก้ล่าสุดจาก me-db
 }
 
 // ตารางเชื่อมโยง - เชื่อมโยงเกมกับประเภทเกม (Many-to-Many)
@@ -243,6 +256,7 @@ model GameRankDB {
   gameOnlineDB GameOnlineDB? @relation(fields: [gameId], references: [id])
   gameId       String?       @db.ObjectId
   imgRank      String // รูปภาพแรงค์
+  imgRankFile  StoredDecorationImage? // metadata ไฟล์รูปแรงค์ล่าสุดจาก me-db
   selcetShow   String? // แสดงในการเลือกหรือไม่
   nameRank     String // ชื่อแรงค์ (เช่น Bronze, Silver, Gold)
   number       Int // ลำดับแรงค์
@@ -273,6 +287,11 @@ model GuildDB {
   guild_room_visiting      String? // ห้องเยี่ยมชม
   guild_categoryId         String? // Discord category ID
   GuildMembers             GuildMembers[] // สมาชิกกิลด์
+  currentMemberCount       Int            @default(0) // จำนวนสมาชิกปัจจุบัน ใช้จองความจุแบบ atomic
+  operationalStatus        GuildOperationalStatus?
+  statusReason             String?
+  statusChangedAt          DateTime?
+  statusChangedBy          String?
 }
 
 // รายงานการสร้างกิลด์ - ติดตามกระบวนการสร้างกิลด์
@@ -287,6 +306,20 @@ model GuildCreateReport {
   confirmedMembers String[] @default([]) // สมาชิกที่ยืนยันแล้ว (เริ่มจากเจ้าของ)
   createdAt        DateTime @default(now())
   expiresAt        DateTime // หมดอายุหลังจาก 5 นาที
+  requestCode      String    @unique
+  guildType        String    // private | public
+  purpose          String    // วัตถุประสงค์ในการก่อตั้งกิลด์
+  approvedBy       String? // ผู้อนุมัติคำขอ
+  approvedAt       DateTime?
+  status           String    @default("PENDING") // PENDING, CREATING, COMPLETED, CANCELLED, FAILED
+  failureReason    String?
+  completedAt      DateTime?
+  officeStatus     GuildApplicationStatus?
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  rejectionReason  String?
+  provisionalUntil DateTime?
+  @@index([officeStatus, createdAt])
 }
 
 // สมาชิกกิลด์ - เก็บข้อมูลสมาชิกในกิลด์
@@ -294,7 +327,7 @@ model GuildMembers {
   id       String   @id @default(auto()) @map("_id") @db.ObjectId
   guildId  String?  @db.ObjectId // ID กิลด์
   position String // ตำแหน่งในกิลด์ (เช่น หัวหน้า, รองหัวหน้า, สมาชิก)
-  userId   String // ID ผู้ใช้
+  userId   String   @unique // ผู้ใช้เป็นสมาชิกได้หนึ่งกิลด์ในระบบเท่านั้น
   guildDB  GuildDB? @relation(fields: [guildId], references: [id])
 }
 
@@ -333,6 +366,7 @@ model GuildInviteDataDB {
   id      String @id @default(auto()) @map("_id") @db.ObjectId
   guildId String // ID กิลด์
   userId  String // ID ผู้ใช้ที่ถูกเชิญ
+  @@unique([guildId, userId])
 }
 
 // คำขอเข้ากิลด์ - เก็บคำขอเข้าร่วมกิลด์
@@ -417,13 +451,23 @@ model ServerDB {
   openBot               Boolean   @default(false) // เปิดใช้งานบอทหรือไม่
   // บทบาท (Roles)
   adminRoleId           String? // ID บทบาทแอดมิน
+  wishAltarRoleId       String? // ID บทบาทแท่นขอพรของบอต MeGuild
   userRoleId            String? // ID บทบาทผู้ใช้
   adventurerRoleId      String? // ID บทบาทนักผจญภัย
   visitorRoleId         String? // ID บทบาทผู้เยี่ยมชม
   guildHeadRoleId       String? // ID บทบาทหัวหน้ากิลด์
   guildCoRoleId         String? // ID บทบาทรองหัวหน้ากิลด์
   eccentricRoleId       String? // ID บทบาทพิเศษ
+  councilRoleId         String? // ID บทบาทสภา
+  councilPresidentRoleId String? // ID บทบาทประธานสภา
+  policeRoleId          String? // ID บทบาทตำรวจ
+  suspectOneStarRoleId String? @map("prisonerOneStarRoleId") // ID บทบาทผู้ต้องหา 1 ดาว
+  suspectTwoStarRoleId String? @map("prisonerTwoStarRoleId") // ID บทบาทผู้ต้องหา 2 ดาว
+  suspectThreeStarRoleId String? @map("prisonerThreeStarRoleId") // ID บทบาทผู้ต้องหา 3 ดาว
+  prisonerRoleId String? // ID บทบาทนักโทษหลังคำตัดสินและเงื่อนไขที่อนุมัติ
   openUntilAt           DateTime  @db.Date // เปิดใช้งานจนถึงวันที่
+  basePackageBillingInterval String? // Calendar billing snapshot; null keeps legacy fixed days
+  basePackageBillingAnchorDay Int? // Preserve the original day across shorter months
   maxMusicBots          Int       @default(1) // จำนวน Music Bot สูงสุดที่ใช้ได้ (ตาม package)
   // ตำแหน่งสร้างห้อง (Position Create)
   meguildPositionCreate String? // ตำแหน่งสร้างห้อง MeGuild
@@ -445,6 +489,15 @@ model ServerDB {
   createdAt             DateTime  @db.Date
   updatedAt             DateTime  @db.Date
   AdminDB               AdminDB[] // ผู้ดูแลระบบ
+  PackageCodeDB         PackageCodeDB[] // โค้ดแพ็กเกจที่ผูกด้วย Discord Guild ID
+  basePackageId         String? // Package หลักที่เปิดใช้งานล่าสุด
+  basePackagePriceCopper Int? // Paid rate snapshot; catalog edits must not revalue prepaid time
+  basePackageDurationDays Int?
+  baseMusicBots         Int       @default(1) // จำนวนบอทเพลงจาก package หลัก (ไม่รวม add-on)
+  clinicDoctorRoleId    String? // Role ที่ได้รับการอนุมัติให้เปิดบริการคลินิก
+  roomSettings          Json? // Managed room configuration; Discord IDs, never role names
+  roomLeaseToken        String? // Cross-process lock for room setup / mutations
+  roomLeaseUntil        DateTime?
 }
 
 // ========================================
@@ -539,7 +592,12 @@ model RoleDiscord {
 model ProductDiscordDB {
   id              String        @id @default(auto()) @map("_id") @db.ObjectId
   name            String // ชื่อสินค้า
+  emoji           String? // Optional display emoji
   img             String? // รูปภาพสินค้า
+  gif             String? // Animated donation gift URL
+  imageAsset      StoredDecorationImage? // Uploaded image metadata
+  gifAsset        StoredDecorationImage? // Uploaded GIF metadata
+  catalogKey      String? // Stable starter-catalog identifier
   description     String // รายละเอียดสินค้า
   discordServerID String? // ID เซิร์ฟเวอร์ Discord
   type            String // ประเภทสินค้า
@@ -559,6 +617,7 @@ model OrderDB {
   id             String        @id @default(auto()) @map("_id") @db.ObjectId
   buyerDiscordID String // Discord ID ของผู้ซื้อ
   name           String // ชื่อผู้ซื้อ
+  emoji          String? // Optional display emoji
   email          String // อีเมลผู้ซื้อ
   tel            String? // เบอร์โทรศัพท์ผู้ซื้อ
   totalPrice     Float // ราคารวมทั้งหมด
@@ -629,6 +688,7 @@ model PaymentDB {
   updatedBy String?
   orderDB   OrderDB?  @relation(fields: [orderId], references: [id])
   orderId   String?   @db.ObjectId // ID ออเดอร์ที่เชื่อมโยง (optional for package subscriptions)
+  @@index([status, createdAt])
 }
 
 // ========================================
@@ -836,6 +896,8 @@ model DiscordBotConfig {
   botToken  String   @unique // Discord Bot Token (ไม่ซ้ำกัน)
   guildId   String // Discord Guild/Server ID
   botName   String? // ชื่อ Bot (optional)
+  botTypeId String? @db.ObjectId // ประเภทที่กำหนดใน Office; null คือ Discord Bot เดิม
+  botType   BotTypeDB? @relation(fields: [botTypeId], references: [id])
   isActive  Boolean  @default(true) // เปิดใช้งานหรือไม่
   createdAt DateTime @default(now())
   createdBy String?
@@ -844,6 +906,19 @@ model DiscordBotConfig {
   deleteBy  String?
 
   @@unique([botToken, guildId]) // ไม่ให้ token เดียวกันซ้ำใน guild เดียวกัน
+  @@index([botTypeId])
+}
+
+model BotTypeDB {
+  id          String             @id @default(auto()) @map("_id") @db.ObjectId
+  name        String             @unique
+  createdAt   DateTime           @default(now())
+  createdBy   String?
+  updatedAt   DateTime           @updatedAt
+  updatedBy   String?
+  deleteBy    String?
+  discordBots DiscordBotConfig[]
+  musicBots   MusicBotDB[]
 }
 
 // ========================================
@@ -901,6 +976,18 @@ model EventCampaign {
   deleteBy          String?
   EventReward       EventReward[] // รางวัลในกิจกรรม
   EventUserProgress EventUserProgress[] // ความคืบหน้าของผู้ใช้
+  communityType     String?
+  communityManaged  Boolean?
+  registrationOpen  DateTime?
+  registrationClose DateTime?
+  capacity          Int?
+  participantCount  Int?       @default(0)
+  allowedRoleIds    String[]   @default([])
+  organizers        String[]   @default([])
+  eligibility       String?
+  checkinMethod     String?
+  rewardTerms       String?
+  announcementChannelId String?
 }
 
 // ประเภทกิจกรรม
@@ -1053,6 +1140,8 @@ model UserWalletDB {
 model MusicBotDB {
   id             String             @id @default(auto()) @map("_id") @db.ObjectId
   name           String // ชื่อ Music Bot
+  botTypeId      String? @db.ObjectId // ประเภทที่กำหนดใน Office; null คือ Music Bot เดิม
+  botType        BotTypeDB? @relation(fields: [botTypeId], references: [id])
   clientId       String             @unique // Discord Client ID
   token          String // Discord Bot Token (encrypted recommended)
   inviteUrl      String // OAuth2 Invite URL พร้อม permissions
@@ -1069,6 +1158,8 @@ model MusicBotDB {
   deleteBy       String?
   // ความสัมพันธ์
   ServerMusicBot ServerMusicBotDB[] // เซิร์ฟเวอร์ที่ใช้บอทนี้
+
+  @@index([botTypeId])
 }
 
 // สถานะบอทเพลง
@@ -1348,4 +1439,943 @@ model MemberAuthRateLimit {
 
   @@index([expiresAt])
   @@map("MeGuildMemberAuthRateLimit")
+}
+
+enum GuildApplicationStatus {
+  PENDING_SIGNATURES
+  UNDER_REVIEW
+  PROVISIONAL
+  ACTIVE
+  REJECTED
+  EXPIRED
+}
+
+enum GuildOperationalStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum GuildPetitionStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum OfficeApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OfficeChallengePurpose {
+  LOGIN
+  PASSWORD_RESET
+  EMAIL_VERIFY
+}
+
+enum OfficePermission {
+  DASHBOARD_VIEW
+  DECORATION_MANAGE
+  GAME_MANAGE
+  MEMBER_VIEW
+  MEMBER_MANAGE
+  STAFF_MANAGE
+  DEPARTMENT_MANAGE
+  GUILD_MANAGE
+  EVENT_MANAGE
+  ECONOMY_MANAGE
+  CONTENT_MANAGE
+  REPORT_VIEW
+  AUDIT_VIEW
+  SYSTEM_MANAGE
+}
+
+enum OfficeRole {
+  SUPERADMIN
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+
+model CommunityJusticeConfig {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String @unique
+  centerCategoryId String?
+  complaintChannelId String?
+  noticeChannelId String?
+  slumCategoryId String?
+  slumTextChannelIds String[] @default([])
+  slumVoiceChannelIds String[] @default([])
+  complaintPanelMessageId String?
+  policePanelMessageId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CommunityHearing {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  caseId String @unique @db.ObjectId
+  channelId String @unique
+  reporterId String
+  subjectId String
+  status String @default("OPEN")
+  everJoined Boolean @default(false)
+  createdAt DateTime @default(now())
+  closedAt DateTime?
+  @@index([guildId, status, createdAt])
+}
+
+model CommunityJusticePolicy {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String @unique
+  version Int @default(1)
+  starThreshold Int @default(3)
+  paymentDays Int @default(15)
+  victimPercent Int @default(70)
+  fundPercent Int @default(30)
+  repeatMultiplierPercent Int @default(150)
+  repeatWindowDays Int @default(365)
+  maximumFineCopper Int @default(1000000)
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CommunityPenalty {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  caseId String @db.ObjectId
+  subjectId String
+  victimId String
+  proposedBy String
+  approvedBy String?
+  status String @default("PROPOSED")
+  reason String
+  stars Int
+  baseFineCopper Int
+  repeatCount Int @default(0)
+  fineCopper Int
+  victimCopper Int
+  fundCopper Int
+  policyVersion Int
+  policySnapshot Json
+  dueAt DateTime?
+  paidAt DateTime?
+  victimTransferId String?
+  fundTransferId String?
+  fundRecipientId String?
+  victimRefundId String?
+  fundRefundId String?
+  refundUncertain Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([guildId, caseId])
+  @@index([guildId, subjectId, status, createdAt])
+  @@index([guildId, status, dueAt])
+}
+
+model CommunityCustody {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  subjectId String
+  penaltyId String @db.ObjectId
+  savedRoleIds String[] @default([])
+  priorVisibility Json?
+  status String @default("PENDING")
+  reason String?
+  startedAt DateTime?
+  releasedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([guildId, subjectId])
+  @@index([guildId, status])
+}
+
+model AntiSpamConfig {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String @unique
+  enabled Boolean @default(true)
+  mode String @default("MONITOR")
+  settings Json
+  nativeRuleIds String[] @default([])
+  updatedBy String
+  updatedAt DateTime @updatedAt
+}
+
+model CaseAction {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  caseId String @db.ObjectId
+  actorId String
+  kind String
+  text String
+  visibility String @default("PARTIES")
+  createdAt DateTime @default(now())
+  @@index([guildId, caseId, createdAt])
+}
+
+model CaseAppeal {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  caseId String @db.ObjectId
+  decisionId String @db.ObjectId
+  submittedBy String
+  reason String
+  status String @default("SUBMITTED")
+  reviewedBy String?
+  outcome String?
+  createdAt DateTime @default(now())
+  reviewedAt DateTime?
+  @@unique([decisionId, submittedBy])
+  @@index([guildId, status])
+}
+
+model CaseDecision {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  caseId String @db.ObjectId
+  status String @default("PROPOSED")
+  finding String
+  verifiedFacts String
+  reason String
+  evidenceIds String[] @db.ObjectId
+  ruleVersionIds String[] @db.ObjectId
+  ruleSnapshot Json
+  subjectId String?
+  sanction String?
+  sanctionData Json?
+  startsAt DateTime
+  endsAt DateTime?
+  proposedBy String
+  approvedBy String?
+  appealPath String
+  createdAt DateTime @default(now())
+  @@index([guildId, caseId, status])
+}
+
+model CaseEvidence {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  caseId String @db.ObjectId
+  submittedBy String
+  kind String
+  value String?
+  mimeType String?
+  size Int?
+  sha256 String?
+  visibility String @default("STAFF")
+  expiresAt DateTime
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([guildId, caseId])
+  @@index([expiresAt, deletedAt])
+}
+
+model CaseReport {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  reporterId String
+  subjectId String?
+  partyIds String[]
+  category String
+  allegation String
+  occurredAt DateTime
+  channelId String?
+  messageId String?
+  claimedDamage String
+  requestedRemedy String
+  status String @default("SUBMITTED")
+  assignedTo String?
+  responseDeadline DateTime?
+  duplicateOf String? @db.ObjectId
+  closureReason String?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([guildId, status, assignedTo, createdAt])
+  @@index([guildId, partyIds])
+  @@index([reporterId, createdAt])
+}
+
+model ClinicBookingDB {
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  idempotencyKey      String    @unique
+  guildId             String
+  roomId              String    @db.ObjectId
+  doctorId            String
+  clientId            String
+  mode                String
+  durationMinutes     Int
+  amountCopper        Int
+  status              String    @default("CREATED") // CREATED, PAID, ACTIVE, REFUNDING, COMPLETED, CANCELLED, FAILED
+  slotClaimed         Boolean   @default(false)
+  transferId          String?
+  activeSeconds       Int       @default(0)
+  activeSince         DateTime?
+  expiresAt           DateTime?
+  completedAt         DateTime?
+  failureCode         String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([guildId, clientId, status])
+  @@index([roomId, status])
+  @@index([roomId, clientId, status])
+}
+
+model ClinicRoomDB {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  guildId               String
+  doctorId              String
+  name                  String
+  description           String?
+  mode                  String   @default("ONE_TO_ONE") // ONE_TO_ONE หรือ ONE_TO_MANY
+  rateUnit              String   @default("MINUTE") // MINUTE หรือ HOUR
+  rateCopper            Int
+  minDurationMinutes    Int      @default(15)
+  maxDurationMinutes    Int      @default(120)
+  maxConcurrentClients  Int      @default(1)
+  reservedClients       Int      @default(0)
+  categoryId            String?
+  channelId             String?
+  roleId                String?
+  status                String   @default("OPEN") // OPEN หรือ CLOSED
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([guildId, status])
+  @@index([guildId, doctorId, status])
+}
+
+model ClinicSessionSegmentDB {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  bookingId   String    @db.ObjectId
+  joinedAt    DateTime  @default(now())
+  leftAt      DateTime?
+  durationSec Int       @default(0)
+
+  @@index([bookingId, joinedAt])
+  @@index([bookingId, leftAt])
+}
+
+model ClinicTipDB {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  idempotencyKey  String   @unique
+  guildId         String
+  bookingId       String   @db.ObjectId
+  doctorId        String
+  clientId        String
+  amountCopper    Int
+  transferId      String?
+  status          String   @default("CREATED") // CREATED, COMPLETED, FAILED
+  comment         String?
+  failureCode     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([bookingId, status])
+  @@index([guildId, doctorId, createdAt])
+}
+
+model CommunityAuditLog {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  actorId String
+  action String
+  resourceId String?
+  reason String?
+  createdAt DateTime @default(now())
+  @@index([guildId, createdAt])
+}
+
+model CommunityConfig {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String @unique
+  roleBindings Json
+  logChannelId String?
+  cosmeticItemIds String[] @default([]) @db.ObjectId
+  fundUserId String?
+  fundWalletId String?
+  fundBudget Int @default(0)
+  fundReserved Int @default(0)
+  fundConsentBy String?
+  evidenceDays Int @default(90)
+  responseHours Int @default(48)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CommunityOperation {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  key String @unique
+  requestHash String
+  result Json
+  createdAt DateTime @default(now())
+  expiresAt DateTime? // Only short-lived Discord UI drafts expire; business receipts omit this.
+  @@index([expiresAt])
+}
+
+model CommunityOutboxJob {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  key String @unique
+  kind String
+  resourceId String
+  payload Json
+  status String @default("PENDING")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  errorCode String?
+  result Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, availableAt])
+  @@index([guildId, status, createdAt])
+}
+
+model CommunityRateLimit {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  key String @unique
+  count Int @default(0)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model CommunityRequestNonce {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  key String @unique
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model CommunityRule {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  code String
+  title String
+  currentVersion Int @default(1)
+  createdAt DateTime @default(now())
+  @@unique([guildId, code])
+}
+
+model CompensationOrder {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  caseId String @db.ObjectId
+  recipientId String
+  requested Json
+  approved Json
+  reason String
+  evidenceIds String[] @db.ObjectId
+  source String
+  payerId String?
+  payerWalletId String?
+  recipientWalletId String?
+  consentBy String?
+  budgetReserved Boolean @default(false)
+  proposedBy String
+  approvedBy String?
+  executedBy String?
+  status String @default("PROPOSED")
+  transactionRef String?
+  reversalRef String?
+  reversalReason String?
+  reversalProposedBy String?
+  reversalApprovedBy String?
+  failureCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([guildId, status, createdAt])
+  @@index([guildId, recipientId])
+}
+
+model EventParticipant {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  eventId String @db.ObjectId
+  userId String
+  status String @default("JOINED")
+  verifiedAt DateTime?
+  verifiedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([eventId, userId])
+  @@index([guildId, userId, createdAt])
+}
+
+model GuildModerationRecord {
+  id        String                 @id @default(auto()) @map("_id") @db.ObjectId
+  guildId   String                 @db.ObjectId
+  status    GuildOperationalStatus
+  reason    String
+  createdBy String
+  createdAt DateTime               @default(now())
+
+  @@index([guildId, createdAt])
+  @@index([status, createdAt])
+  @@map("me_guild_office_moderation")
+}
+
+model GuildPetition {
+  id          String              @id @default(auto()) @map("_id") @db.ObjectId
+  guildId     String?             @db.ObjectId
+  guildName   String?
+  submittedBy String
+  subject     String
+  message     String
+  status      GuildPetitionStatus @default(OPEN)
+  adminNote   String?
+  reviewedAt  DateTime?
+  reviewedBy  String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([guildId, createdAt])
+  @@map("me_guild_petitions")
+}
+
+model MeCoinPurchaseDB {
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
+  idempotencyKey       String    @unique
+  discordUserId        String
+  userDisplayName      String
+  discordGuildId       String
+  externalMemberId     String // discord:<serverId>:<memberId> (wallet แยกต่อ Discord Server)
+  walletAccountId      String?
+  sku                  String
+  packageType          String
+  packageId            String
+  packageName          String
+  priceBaht            Int
+  amountCopper         Int
+  durationDays         Int
+  billingInterval      String? // Calendar interval; null keeps legacy fixed days
+  entitlementBaseId    String? // Base tier inherited by custom packages
+  musicBots            Int
+  entitlementKind      String // BASE_PACKAGE, MUSIC_ADDON, FEATURE_ADDON
+  purchaseVersion      Int       @default(1)
+  status               String    @default("CREATED") // AWAITING_CONFIRMATION, CREATED, SETTLING, DIRECT_PREPARING, DIRECT_PENDING, DIRECT_CLOSED, PAID, PROVISIONING, COMPLETED, REFUND_PENDING, REFUNDING, REFUNDED, FAILED
+  meCoinTransactionId  String?
+  meCoinRefundId       String?
+  // Direct package checkout uses ME Coin's merchant payment API. Copper is not debited.
+  paymentMethod        String?   @default("ME_COIN")
+  directPaymentReference String?
+  directCheckoutUrl     String?
+  directCheckoutExpiresAt DateTime?
+  directPaymentPaidAt   DateTime?
+  balanceAfterCopper   Int?
+  entitlementAppliedAt DateTime?
+  musicBotsSyncedAt    DateTime?
+  failureCode          String?
+  failureMessage       String?
+  retryCount           Int       @default(0)
+  nextAttemptAt        DateTime  @default(now())
+  lastAttemptAt        DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([discordUserId, createdAt])
+  @@index([discordGuildId, createdAt])
+}
+
+model MeCoinTransferDB {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  idempotencyKey        String    @unique
+  discordGuildId        String
+  senderDiscordUserId   String
+  receiverDiscordUserId String
+  senderAccountId       String?
+  receiverAccountId     String?
+  amountCopper          Int
+  comment               String?
+  kind                  String    @default("TRANSFER") // TRANSFER, DONATION, CLINIC หรือ CLINIC_TIP
+  paymentMode           String    @default("SCOPED") // SCOPED (Discord wallet) หรือ MAIN (ME Coin main wallet)
+  status                String    @default("CREATED") // CREATED, DEBITED, COMPLETED, REFUND_PENDING, REFUNDING, REFUNDED, FAILED
+  debitTransactionId    String?
+  creditTransactionId   String?
+  refundTransactionId   String?
+  failureCode           String?
+  retryCount            Int       @default(0)
+  nextAttemptAt         DateTime  @default(now())
+  lastAttemptAt         DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([status, nextAttemptAt])
+  @@index([discordGuildId, senderDiscordUserId, createdAt])
+}
+
+model ModerationIncident {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  userId String
+  channelId String?
+  messageId String?
+  eventKey String @unique
+  rules String[]
+  source String
+  excerpt String?
+  response String
+  status String
+  outcome Json?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  @@index([guildId, userId, createdAt])
+  @@index([guildId, status, createdAt])
+  @@index([expiresAt])
+}
+
+model OfficeAuditLog {
+  id         String           @id @default(auto()) @map("_id") @db.ObjectId
+  actorId    String?          @db.ObjectId
+  actor      OfficeStaffUser? @relation("OfficeAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String
+  targetId   String?
+  detail     Json?
+  createdAt  DateTime         @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@map("me_guild_office_audit_logs")
+}
+
+model OfficeAuthChallenge {
+  id                  String                 @id @default(auto()) @map("_id") @db.ObjectId
+  userId              String?                @db.ObjectId
+  user                OfficeStaffUser?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email               String
+  purpose             OfficeChallengePurpose
+  codeHash            String
+  attempts            Int                    @default(0)
+  maxAttempts         Int                    @default(5)
+  expiresAt           DateTime
+  verifiedAt          DateTime?
+  authVersion         Int?
+  pendingPasswordHash String?
+  pendingName         String?
+  createdAt           DateTime               @default(now())
+
+  @@index([email, purpose, createdAt])
+  @@index([expiresAt])
+  @@map("me_guild_office_auth_challenges")
+}
+
+model OfficeAuthRateLimit {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("me_guild_office_auth_rate_limits")
+}
+
+model OfficeDepartment {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  code        String            @unique
+  name        String            @unique
+  description String?
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  members     OfficeStaffUser[]
+  positions   OfficePosition[]
+
+  @@map("me_guild_office_departments")
+}
+
+model OfficePosition {
+  id           String            @id @default(auto()) @map("_id") @db.ObjectId
+  departmentId String            @db.ObjectId
+  department   OfficeDepartment  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  code         String
+  name         String
+  description  String?
+  isLeadership Boolean           @default(false)
+  isActive     Boolean           @default(true)
+  permissions  OfficePermission[] @default([])
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  members      OfficeStaffUser[]
+
+  @@unique([departmentId, code])
+  @@index([departmentId, isActive, name])
+  @@map("me_guild_office_positions")
+}
+
+model OfficeStaffPermission {
+  id         String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String           @db.ObjectId
+  user       OfficeStaffUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission OfficePermission
+  granted    Boolean          @default(true)
+  grantedBy  String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([userId, permission])
+  @@index([permission, granted])
+  @@map("me_guild_office_staff_permissions")
+}
+
+model OfficeStaffUser {
+  id                 String                  @id @default(auto()) @map("_id") @db.ObjectId
+  email              String                  @unique
+  providerEmail      String?
+  passwordHash       String?
+  googleId           String?
+  discordId          String?
+  name               String?
+  phone              String?
+  employeeCode       String?
+  jobTitle           String? // Legacy display snapshot; new assignments use positionId.
+  avatarUrl          String?
+  role               OfficeRole              @default(STAFF)
+  departmentId       String?                 @db.ObjectId
+  department         OfficeDepartment?       @relation(fields: [departmentId], references: [id])
+  positionId         String?                 @db.ObjectId
+  position           OfficePosition?         @relation(fields: [positionId], references: [id])
+  isActive           Boolean                 @default(true)
+  approvalStatus     OfficeApprovalStatus    @default(APPROVED)
+  emailVerifiedAt    DateTime?
+  approvedAt         DateTime?
+  approvedBy         String?
+  rejectionReason    String?
+  profileCompletedAt DateTime?
+  authVersion        Int                     @default(1)
+  lastLoginAt        DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  permissions        OfficeStaffPermission[]
+  authChallenges     OfficeAuthChallenge[]
+  auditActions       OfficeAuditLog[]        @relation("OfficeAuditActor")
+
+  @@index([departmentId, isActive])
+  @@index([positionId, isActive])
+  // Nullable identity fields use partial unique MongoDB indexes from the auth index setup script.
+  @@index([googleId])
+  @@index([discordId])
+  @@index([employeeCode])
+  @@map("me_guild_office_staff")
+}
+
+model PackagePriceChangeDB {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  sku               String
+  previousPriceBaht Int
+  priceBaht         Int
+  previousYearlyPriceBaht Int?
+  yearlyPriceBaht Int?
+  detail Json?
+  revision          Int
+  adminId           String
+  createdAt         DateTime @default(now())
+
+  @@index([sku, createdAt])
+}
+
+model PackagePriceDB {
+  id        String   @id @map("_id") // main:1 through main:4
+  priceBaht Int
+  name String?
+  category String?
+  botCount Int?
+  basePackageId String?
+  yearlyPriceBaht Int?
+  enabled Boolean @default(true)
+  revision  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String   @default("system:seed")
+}
+
+model RaffleCampaign {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  eventId String @db.ObjectId
+  title String
+  status String @default("DRAFT")
+  ticketLimit Int @default(1)
+  ticketCount Int @default(0)
+  prizes Json
+  claimDeadline DateTime
+  snapshot Json?
+  snapshotHash String?
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([guildId, status, createdAt])
+}
+
+model RaffleDraw {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  campaignId String @db.ObjectId
+  round Int
+  seed String
+  snapshotHash String
+  status String @default("DRAWING")
+  replacesWinnerId String? @db.ObjectId
+  reason String?
+  proposedBy String
+  approvedBy String?
+  createdAt DateTime @default(now())
+  @@unique([campaignId, round])
+}
+
+model RaffleTicket {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  code String @unique
+  guildId String
+  campaignId String @db.ObjectId
+  userId String
+  sourceRef String
+  ordinal Int
+  status String @default("ELIGIBLE")
+  issuedAt DateTime @default(now())
+  @@unique([campaignId, sourceRef, ordinal])
+  @@index([guildId, userId, issuedAt])
+  @@index([campaignId, status])
+}
+
+model RaffleWinner {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  campaignId String @db.ObjectId
+  drawId String @db.ObjectId
+  ticketId String @db.ObjectId
+  userId String
+  prizeIndex Int
+  prize Json
+  status String @default("AWAITING_CLAIM")
+  claimDeadline DateTime
+  deliveredAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([drawId, prizeIndex])
+  @@unique([drawId, userId])
+  @@index([guildId, userId, createdAt])
+}
+
+model RuleVersion {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  guildId String
+  ruleId String @db.ObjectId
+  version Int
+  title String
+  description String
+  examples String
+  severity String
+  sanctions String[]
+  approverPermission String
+  effectiveAt DateTime
+  createdBy String
+  createdAt DateTime @default(now())
+  @@unique([ruleId, version])
+  @@index([guildId, effectiveAt])
+}
+
+model ServerEntitlementDB {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  serverId         String
+  sku              String
+  kind             String // BASE_PACKAGE, MUSIC_ADDON, FEATURE_ADDON
+  quantity         Int       @default(0)
+  startsAt         DateTime  @default(now())
+  expiresAt        DateTime?
+  sourcePurchaseId String    @unique @db.ObjectId
+  createdAt        DateTime  @default(now())
+
+  @@index([serverId, kind, expiresAt])
+  @@index([serverId, sku, expiresAt])
+}
+
+model SiteDecoration {
+  id            String                  @id @default(auto()) @map("_id") @db.ObjectId
+  key           String                  @unique
+  label         String
+  placement     String
+  altText       String?
+  imageUrl      String
+  imageFile     StoredDecorationImage
+  imageVersions StoredDecorationImage[]
+  enabled       Boolean                 @default(true)
+  pageKey       String?
+  sectionKey    String?
+  assetRole     String?
+  displayOrder  Int?
+  note          String?
+  createdBy     String?
+  updatedBy     String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([placement])
+  @@index([pageKey, sectionKey, displayOrder])
+  @@map("me_guild_site_decorations")
+}
+
+model StageDonationDB {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  interactionId         String   @unique
+  stageRoomId           String
+  discordGuildId        String
+  channelId             String
+  senderId              String
+  receiverId            String
+  senderAccountId       String
+  receiverAccountId     String
+  giftName              String
+  amountCopper          Int
+  comment               String?
+  status                String   @default("AWAITING_CONFIRMATION") // WAITING_TOPUP, CONFIRMED, COMPLETED, FAILED, CANCELLED
+  topupRequiredCopper   Int?
+  topupReference        String?
+  topupCheckoutUrl      String?
+  topupAmountSatang     Int?
+  topupGrantedCopper    Int?
+  expiresAt             DateTime
+  confirmedAt           DateTime?
+  creditTransactionId   String?
+  failureCode           String?
+  nextAttemptAt         DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([stageRoomId, status, createdAt])
+}
+
+model StageRoomDB {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  discordGuildId String
+  channelId      String   @unique
+  ownerId        String
+  topic          String
+  status         String   @default("CREATING") // CREATING, ACTIVE, CLOSING, CLOSED
+  panelMessageId String?
+  systemGroup    String? // ADMIN / ENTERTAINMENT; null preserves legacy Busking policy
+  roomType       String? // rest / secret / council / public / GAME / LIVE / BEDROOM / TALKSHOW
+  categoryId     String?
+  temporary      Boolean? // Legacy null is handled only by the legacy cleanup service
+  roomPolicy     Json? // Explicit invitations, moderators, speakers, streamers and requests
+  controlMessageId String?
+  controlPanelPending Boolean?
+  emptySince     DateTime?
+  operationError String?
+  closeReason    String? // EXPLICIT / EMPTY; preserves occupied-room checks across retries
+  closedAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([discordGuildId, systemGroup, status])
 }

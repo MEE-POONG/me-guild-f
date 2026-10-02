@@ -11,16 +11,16 @@ const labels = {
   ja: { language: "サイトの言語", light: "ライトモードに切り替え", dark: "ダークモードに切り替え" },
 };
 
-export function SiteControls({ compact = false }: { compact?: boolean }) {
+export function SiteControls({ compact = false, persistToAccount }: { compact?: boolean; persistToAccount: boolean }) {
   const { locale, colorMode, setLocale, setColorMode } = useAppPreferences();
   const copy = labels[locale];
   const nextMode = colorMode === "dark" ? "light" : "dark";
   return <div className={`site-controls ${compact ? "site-controls-compact" : ""}`}>
     <label className="sr-only" htmlFor={compact ? "site-locale-mobile" : "site-locale"}>{copy.language}</label>
-    <select id={compact ? "site-locale-mobile" : "site-locale"} name="locale" value={locale} onChange={(event) => setLocale(event.target.value as SiteLocale)} className="site-language-select">
+    <select id={compact ? "site-locale-mobile" : "site-locale"} name="locale" value={locale} onChange={(event) => setLocale(event.target.value as SiteLocale, persistToAccount)} className="site-language-select">
       {siteLocales.map((code) => <option key={code} value={code}>{compact ? localeMeta[code].label : `${localeMeta[code].short} · ${localeMeta[code].label}`}</option>)}
     </select>
-    <button type="button" className="site-theme-toggle" onClick={() => setColorMode(nextMode)} aria-label={nextMode === "light" ? copy.light : copy.dark} title={nextMode === "light" ? copy.light : copy.dark}>
+    <button type="button" className="site-theme-toggle" onClick={() => setColorMode(nextMode, persistToAccount)} aria-label={nextMode === "light" ? copy.light : copy.dark} title={nextMode === "light" ? copy.light : copy.dark}>
       {colorMode === "dark" ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}
     </button>
   </div>;
