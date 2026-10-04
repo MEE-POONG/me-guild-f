@@ -272,7 +272,45 @@ model GameRankDB {
 // ========================================
 
 // ข้อมูลกิลด์ - เก็บข้อมูลกิลด์หลัก
+// Durable provenance for the shared Discord council role.
+model CouncilMembershipState {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  serverId           String
+  userId             String
+  roleId             String?
+  founderGuildIds    String[] @default([])
+  qualifyingRoleIds  String[] @default([])
+  independentGranted Boolean  @default(false)
+  independentSource  String? // PRE_EXISTING | MANUAL
+  reason             String?
+  grantedBy          String?
+  grantedAt          DateTime?
+  desired            Boolean  @default(false)
+  syncPending        Boolean  @default(true)
+  lastError          String?
+  lastSyncedAt       DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([serverId, userId])
+  @@index([syncPending, updatedAt])
+}
+
 model GuildDB {
+  registrationServerId   String? // Discord ต้นทางที่ลงทะเบียน (ไม่เปลี่ยนเมื่อย้าย)
+  registrationServerName String?
+  headquartersMove       Json? // durable prepare/retire/activate journal for one headquarters
+  headquartersTargetServerId String? // quota reservation while moving
+  governanceVersion        Int? // Optimistic lock for reviewed founder roster changes
+  founderHistory           Json? // Bounded audit history; founding signatures remain immutable
+  serverId                 String?
+  purpose                  String?
+  description              String?
+  organizationType         String? // COMMUNITY | GAMING | CREATIVE | OTHER
+  foundingReportId         String? @db.ObjectId
+  foundedAt                DateTime?
+  minimumFounders           Int?
+
   id                       String         @id @default(auto()) @map("_id") @db.ObjectId
   Logo                     String         @default("https://www.design365print.com/UploadFile/Blog/blog_941976621.jpg") // โลโก้กิลด์
   guild_leader             String? // หัวหน้ากิลด์
@@ -287,6 +325,8 @@ model GuildDB {
   guild_room_visiting      String? // ห้องเยี่ยมชม
   guild_categoryId         String? // Discord category ID
   GuildMembers             GuildMembers[] // สมาชิกกิลด์
+  @@index([serverId])
+  @@index([headquartersTargetServerId])
   currentMemberCount       Int            @default(0) // จำนวนสมาชิกปัจจุบัน ใช้จองความจุแบบ atomic
   operationalStatus        GuildOperationalStatus?
   statusReason             String?
@@ -296,6 +336,15 @@ model GuildDB {
 
 // รายงานการสร้างกิลด์ - ติดตามกระบวนการสร้างกิลด์
 model GuildCreateReport {
+  sourceServerName String? // ชื่อ Discord ต้นทาง ณ เวลาลงทะเบียน
+  registrationVersion Int? // 2: consent and three-founder registration
+  description         String?
+  organizationType    String?
+  recruitmentMode     String? // PUBLIC | CODE
+  recruitmentMessageId String?
+  recruitmentChannelId String?
+  rulesVersion        String?
+
   id               String   @id @default(auto()) @map("_id") @db.ObjectId
   ownerId          String // ID เจ้าของกิลด์
   serverId         String // Discord server ID where guild is being created
@@ -305,7 +354,7 @@ model GuildCreateReport {
   invitedMembers   String[] // สมาชิกที่ถูกเชิญทั้งหมด
   confirmedMembers String[] @default([]) // สมาชิกที่ยืนยันแล้ว (เริ่มจากเจ้าของ)
   createdAt        DateTime @default(now())
-  expiresAt        DateTime // หมดอายุหลังจาก 5 นาที
+  expiresAt        DateTime // Legacy: 5 minutes; registrationVersion 2: 7 days
   requestCode      String    @unique
   guildType        String    // private | public
   purpose          String    // วัตถุประสงค์ในการก่อตั้งกิลด์
@@ -324,6 +373,7 @@ model GuildCreateReport {
 
 // สมาชิกกิลด์ - เก็บข้อมูลสมาชิกในกิลด์
 model GuildMembers {
+  isFounder Boolean? // Null keeps legacy Leader / Co-founder classification
   id       String   @id @default(auto()) @map("_id") @db.ObjectId
   guildId  String?  @db.ObjectId // ID กิลด์
   position String // ตำแหน่งในกิลด์ (เช่น หัวหน้า, รองหัวหน้า, สมาชิก)
@@ -371,6 +421,14 @@ model GuildInviteDataDB {
 
 // คำขอเข้ากิลด์ - เก็บคำขอเข้าร่วมกิลด์
 model GuildInviteRequest {
+  serverId   String?
+  status     String?   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  reason     String?
+  createdAt  DateTime? @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+  @@unique([guildId, userId])
+  @@index([guildId, status])
   id      String @id @default(auto()) @map("_id") @db.ObjectId
   guildId String // ID กิลด์
   userId  String // ID ผู้ใช้ที่ขอเข้า
@@ -381,6 +439,49 @@ model GuildInviteRequest {
 // ========================================
 
 // ข่าวสาร - เก็บข้อมูลข่าวสารและอัพเดท
+// Opt-in Discord retention. Do not use MongoDB TTL: Discord must be deleted first.
+model DiscordPostRetentionPolicy {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  guildId       String
+  channelId     String
+  days          Int      @default(30)
+  enabled       Boolean  @default(true)
+  scanBefore    String?
+  scanAfter     DateTime @default(now())
+  lastErrorCode String?
+  updatedBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([guildId, channelId])
+  @@index([enabled, scanAfter])
+}
+
+model DiscordPostRetentionDB {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  guildId       String
+  channelId     String
+  targetId      String
+  targetType    String    // MESSAGE or THREAD
+  policyId      String?   @db.ObjectId
+  createdBy     String?
+  postedAt      DateTime
+  expiresAt     DateTime
+  status        String    @default("PENDING") // PENDING, DELETING, DELETED, CANCELLED
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  leaseToken    String?
+  leaseUntil    DateTime?
+  deletedAt     DateTime?
+  lastErrorCode String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([guildId, targetType, targetId])
+  @@index([status, nextAttemptAt, expiresAt])
+  @@index([guildId, channelId, status])
+}
+
 model NewsUpdateDB {
   id           String         @id @default(auto()) @map("_id") @db.ObjectId
   title        String // หัวข้อข่าว
@@ -443,6 +544,9 @@ model NewsTypeNews {
 
 // ข้อมูลเซิร์ฟเวอร์ - เก็บการตั้งค่าเซิร์ฟเวอร์ Discord
 model ServerDB {
+  guildHeadquartersLimit      Int     @default(1) // จำนวนที่ทำการหลักที่รับได้
+  guildHeadquartersLeaseToken String?
+  guildHeadquartersLeaseUntil DateTime?
   id                    String    @id @default(auto()) @map("_id") @db.ObjectId
   ownerId               String // ID เจ้าของเซิร์ฟเวอร์
   serverId              String    @unique // Discord Server ID (ไม่ซ้ำกัน)
@@ -479,6 +583,7 @@ model ServerDB {
   newsChannel           String? // ช่องข่าวสาร
   registerChannel       String? // ช่องลงทะเบียน
   complaintChannel      String? // ช่องร้องเรียน
+  communityAnnouncementChannel String?
   suggestionChannel     String? // ช่องแนะนำ
   tradeChannel          String? // ช่องซื้อขาย
   guildChannel          String? // ช่องกิลด์
@@ -1581,7 +1686,9 @@ model CommunityCustody {
   id String @id @default(auto()) @map("_id") @db.ObjectId
   guildId String
   subjectId String
-  penaltyId String @db.ObjectId
+  penaltyId String? @db.ObjectId
+  decisionId String? @db.ObjectId
+  restrictionKind String?
   savedRoleIds String[] @default([])
   priorVisibility Json?
   status String @default("PENDING")
@@ -2298,6 +2405,28 @@ model ServerEntitlementDB {
   @@index([serverId, sku, expiresAt])
 }
 
+model BotMediaAsset {
+  id            String                  @id @default(auto()) @map("_id") @db.ObjectId
+  key           String                  @unique
+  label         String
+  category      String                  @default("OTHER")
+  altText       String?
+  imageUrl      String
+  imageFile     StoredDecorationImage
+  imageVersions StoredDecorationImage[]
+  width         Int?
+  height        Int?
+  enabled       Boolean                 @default(true)
+  note          String?
+  createdBy     String?
+  updatedBy     String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([category, enabled])
+  @@map("me_guild_bot_media_assets")
+}
+
 model SiteDecoration {
   id            String                  @id @default(auto()) @map("_id") @db.ObjectId
   key           String                  @unique
@@ -2378,4 +2507,84 @@ model StageRoomDB {
 
   @@index([status, createdAt])
   @@index([discordGuildId, systemGroup, status])
+}
+
+// Consent is bound to one Discord member, server and operation and can be consumed once.
+model GuildRegistrationConsent {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  serverId String
+  userId String
+  intent String
+  reportId String? @db.ObjectId
+  rulesVersion String
+  acceptedAt DateTime?
+  consumedAt DateTime?
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+// Historical founder signatures, one per request and member.
+model GuildFounderRegistration {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  reportId String @db.ObjectId
+  serverId String
+  userId String
+  rulesVersion String
+  acceptedAt DateTime
+  createdAt DateTime @default(now())
+  @@unique([reportId, userId])
+  @@index([reportId])
+}
+
+model CommunitySuggestionPost {
+  submissionId String @unique
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  serverId String
+  authorId String
+  title String
+  content String
+  channelId String
+  messageId String?
+  status String @default("PUBLISHING")
+  createdAt DateTime @default(now())
+  @@index([serverId, createdAt])
+}
+
+model CommunitySuggestionVote {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  postId String @db.ObjectId
+  userId String
+  choice String // LIKE | DISLIKE | NEUTRAL
+  updatedAt DateTime @updatedAt
+  @@unique([postId, userId])
+  @@index([postId, choice])
+}
+
+model GuildFounderReservation {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique
+  reportId String @db.ObjectId
+  serverId String
+  @@index([reportId])
+}
+// Recruitment is tenant-scoped; Discord identity is global, employment is not.
+model StaffApplicationDB {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  guildId             String
+  guildName           String
+  applicantId         String
+  applicantName       String
+  sourceChannelId     String
+  status              String   @default("PENDING") // PENDING | CALLING | CALLED | CLOSING | CLOSED
+  noticeChannelId     String?
+  noticeMessageId     String?
+  interviewChannelId  String?
+  interviewerId       String?
+  callToken           String?
+  dmStatus            String   @default("NOT_SENT") // NOT_SENT | SENT | FAILED
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([guildId, applicantId])
+  @@index([guildId, status, createdAt])
 }
