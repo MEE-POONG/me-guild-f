@@ -600,6 +600,7 @@ model ServerDB {
   basePackageDurationDays Int?
   baseMusicBots         Int       @default(1) // จำนวนบอทเพลงจาก package หลัก (ไม่รวม add-on)
   clinicDoctorRoleId    String? // Role ที่ได้รับการอนุมัติให้เปิดบริการคลินิก
+  fortuneTellerRoleId   String? // Role ที่อนุญาตให้เปิดห้องหมอดู
   roomSettings          Json? // Managed room configuration; Discord IDs, never role names
   roomLeaseToken        String? // Cross-process lock for room setup / mutations
   roomLeaseUntil        DateTime?
@@ -984,11 +985,14 @@ model TradingofRanks {
 
 // เวลาในห้องเสียง - ติดตามเวลาที่ผู้ใช้อยู่ในห้องเสียง
 model VoiceTime {
+  guildId   String? // Discord origin; missing for legacy records, never guessed.
+  guildName String?
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   userId    String // ID ผู้ใช้
   channelId String   @default("") // ID ช่องเสียง
   duration  Int // ระยะเวลา (วินาที)
   timestamp DateTime @default(now()) // เวลาที่บันทึก
+  @@index([guildId, userId, timestamp])
 }
 
 // ========================================
@@ -1834,6 +1838,7 @@ model ClinicBookingDB {
 }
 
 model ClinicRoomDB {
+  serviceType           String? // CLINIC | FORTUNE; missing/null means legacy clinic.
   id                    String   @id @default(auto()) @map("_id") @db.ObjectId
   guildId               String
   doctorId              String
@@ -2575,6 +2580,14 @@ model StaffApplicationDB {
   applicantId         String
   applicantName       String
   sourceChannelId     String
+  jobType             String? // Selected community job; null for legacy applications.
+  jobName             String? // Display snapshot at submission.
+  jobRoleId           String? // Existing Discord role when applicable; not granted by applying.
+  interviewResult     String? // PASSED | FAILED; null for pending, legacy or automatic expiry.
+  grantedRoleId       String? // Verified Discord role receipt, independent of interview result.
+  roleGrantedAt       DateTime?
+  reviewedBy          String?
+  closedAt            DateTime?
   status              String   @default("PENDING") // PENDING | CALLING | CALLED | CLOSING | CLOSED
   noticeChannelId     String?
   noticeMessageId     String?
@@ -2587,4 +2600,25 @@ model StaffApplicationDB {
 
   @@unique([guildId, applicantId])
   @@index([guildId, status, createdAt])
+}
+
+// Every received Discord command/component; no form contents, options or tokens.
+model DiscordInteractionLog {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  interactionId String   @unique
+  guildId       String?
+  guildName     String?
+  channelId     String?
+  actorId       String
+  botId         String?
+  kind          String
+  action        String
+  status        String // RECEIVED | ACKNOWLEDGED | RESPONDED | ERROR | NO_RESPONSE
+  responseMethod String?
+  durationMs    Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([guildId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, status, createdAt])
 }
