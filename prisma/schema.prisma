@@ -601,6 +601,7 @@ model ServerDB {
   baseMusicBots         Int       @default(1) // จำนวนบอทเพลงจาก package หลัก (ไม่รวม add-on)
   clinicDoctorRoleId    String? // Role ที่ได้รับการอนุมัติให้เปิดบริการคลินิก
   fortuneTellerRoleId   String? // Role ที่อนุญาตให้เปิดห้องหมอดู
+  receptionistRoleId    String? // Role อาชีพพนักงานต้อนรับ
   roomSettings          Json? // Managed room configuration; Discord IDs, never role names
   roomLeaseToken        String? // Cross-process lock for room setup / mutations
   roomLeaseUntil        DateTime?
