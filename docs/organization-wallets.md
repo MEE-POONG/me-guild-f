@@ -18,3 +18,9 @@
 ## Wallet dropdowns
 
 Recipients, support destinations, service servers and committee members can be selected by name. Searches support bounded results, retry and additional organization pages. Personal suggestions are restricted to the selected organization and require fresh manager authorization; an exact Discord ID remains available for outside recipients. Organization suggestions contain only names and identifiers of active provisioned wallets. No balances, history, email or phone numbers are returned. Recipient and authority checks still run before mutation, with the existing confirmation and operation-key recovery.
+
+## ซื้อเหรียญเข้ากระเป๋าองค์กร
+
+เลือกกระเป๋ากิลด์หรือ Discord server แล้วกด “เลือกแพ็กเกจและซื้อเหรียญ” เพื่อเปิด ME Coin พร้อมกระเป๋าปลายทางเดิม หน้าซื้อเหรียญมี dropdown บัญชีส่วนตัว/องค์กรที่จัดการได้ แสดงชื่อปลายทาง ราคา และจำนวนเหรียญก่อนชำระ รองรับ PromptPay/บัตรผ่าน Checkout และยอด THB ที่มีอยู่ ผู้ซื้อต้องเข้าสู่บัญชี ME Coin และเชื่อม Discord ก่อนซื้อเข้าองค์กร หากไม่พบสิทธิ์หรือปลายทางไม่พร้อม ระบบจะไม่เปลี่ยนไปเติมบัญชีส่วนตัวเอง
+
+Discord ใช้ `/org-wallet action:buy-coins` หรือปุ่มซื้อเหรียญในหน้าดูยอด เหรียญเข้าบัญชีองค์กรโดยตรงหลังยืนยันชำระ ฝั่งเซิร์ฟเวอร์ตรวจสิทธิ์ปัจจุบัน ราคา และสถานะกระเป๋าอีกครั้ง รายการซื้อเก็บผู้ชำระและองค์กรปลายทางแยกกัน ผูกปลายทางกับรหัสรายการเดิม การคืนเงิน/ข้อโต้แย้งปรับยอดของกระเป๋าปลายทางเดิม การปิดบัญชีต้องรอรายการซื้อเหรียญที่ยังไม่สิ้นสุด

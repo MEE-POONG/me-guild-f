@@ -17,6 +17,7 @@ const labels: Record<string, string> = { GUILD: "กิลด์", DISCORD_SERVE
 const money = (value: string | number) => BigInt(value).toLocaleString("th-TH") + " Copper";
 const query = (ref: Ref, extra?: Record<string, string>) => "?" + new URLSearchParams({ kind: ref.kind, id: ref.externalId, ...extra });
 const optionsEndpoint = (kind: string, source?: Ref) => "/api/organization-wallets?" + new URLSearchParams({ options: "1", kind, ...(source ? { sourceKind: source.kind, sourceId: source.externalId } : {}) });
+const buyCoinsHref = (ref: Ref) => "https://me-coins.me-prompt-technology.com/wallet/me-coins?" + new URLSearchParams({ organizationKind: ref.kind, organizationId: ref.externalId });
 class OperationError extends Error {
   constructor(message: string, readonly code?: string) { super(message); }
 }
@@ -153,7 +154,7 @@ export function OrganizationWallets({ profileHref = "/profile" }: { profileHref?
       <div className={styles.heroArt} aria-hidden="true"><div className={styles.artCard}><b>ME COIN</b><span /><small>GUILD &amp; SERVER</small></div><div className={styles.artCoin}>M</div><span className={styles.artSpark}>✧</span></div>
     </header>
     <nav className={styles.quickNav} aria-label="ส่วนต่าง ๆ ของกระเป๋า">
-      <div className={styles.quickNavLinks}><a href="#organization-accounts">กระเป๋าขององค์กร</a><a href="#organization-support">โอนสนับสนุน</a>
+      <div className={styles.quickNavLinks}><a href="#organization-buy-coins">ซื้อเหรียญ</a><a href="#organization-accounts">กระเป๋าขององค์กร</a><a href="#organization-support">โอนสนับสนุน</a>
         {detail && <><a href="#organization-packages">แพ็กเกจ</a>{current?.kind === "GUILD" && <a href="#organization-committee">กรรมการ</a>}<a href="#organization-history">ประวัติ</a></>}
       </div><button disabled={busy} onClick={() => void run(async () => { await loadDirectory(); if (current) await loadDetail(current); })}>↻ รีเฟรช</button>
     </nav>
@@ -165,6 +166,17 @@ export function OrganizationWallets({ profileHref = "/profile" }: { profileHref?
         {(!pending.attempted || pending.done) && <button disabled={busy} onClick={() => { try { savePending(null); } catch { setError("บันทึกรายการในเบราว์เซอร์ไม่ได้"); } }}>{pending.done ? "เริ่มรายการใหม่" : "ยกเลิกร่าง"}</button>}</div>
       {pending.attempted && !pending.done && <p>กำลังรอผลรายการนี้ ใช้ปุ่มเดิมเพื่อตรวจสอบต่อได้แม้โหลดหน้าใหม่</p>}
     </section>}
+    <section className={styles.buyCoins} id="organization-buy-coins" aria-label="ซื้อเหรียญเข้าองค์กร">
+      <div><p className={styles.eyebrow}>เติมพลังให้ทุกกิจกรรม</p><h2>ซื้อเหรียญเข้ากระเป๋าองค์กร</h2><p>เลือกกิลด์หรือเซิร์ฟเวอร์ แล้วเลือกแพ็กเกจและชำระผ่าน ME Coin<br />เหรียญเข้ากระเป๋าที่เลือกโดยตรงเมื่อชำระสำเร็จ</p></div>
+      <div><WalletSelect label="กระเป๋าที่รับเหรียญ" value={selected} onChange={choose} disabled={busy}
+        options={items.filter(item => item.status === "ACTIVE").map(item => ({ value: item.kind + ":" + item.externalId, label: item.name, description: labels[item.kind] }))}
+        emptyMessage={actor ? "ยังไม่มีกระเป๋าที่คุณจัดการและพร้อมรับเหรียญ" : "กำลังโหลดกระเป๋า…"} />
+        {current && detail?.organization.status === "ACTIVE" && !busy
+          ? <a className={styles.buyLink} href={buyCoinsHref(current)} target="_blank" rel="noopener noreferrer">เลือกแพ็กเกจและซื้อเหรียญ ↗</a>
+          : <button type="button" disabled>เลือกกระเป๋าที่พร้อมรับเหรียญก่อน</button>}
+        <p className={styles.pickerHint}>ตรวจชื่อกระเป๋า จำนวนเหรียญ และราคาก่อนชำระ</p>
+      </div>
+    </section>
     <div className={styles.grid}>
       <section className={styles.card} id="organization-accounts"><div className={styles.cardHeading}><span className={styles.cardIcon} aria-hidden="true">M</span><h2>กระเป๋าที่คุณจัดการ</h2></div><p>แสดงยอดและประวัติเฉพาะผู้มีสิทธิ์จัดการเงิน</p>
         <WalletSelect label="กระเป๋าที่ต้องการจัดการ" value={selected} disabled={busy} onChange={choose} required={false}
