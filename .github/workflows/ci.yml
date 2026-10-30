@@ -1,0 +1,101 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: mongodb://127.0.0.1:27017/build
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.14.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Build production and migration containers
+        run: |
+          docker build --target runtime --tag me-guild:ci .
+          docker build --target migrator --tag me-guild-migrator:ci .
+      - name: Verify isolated indexes and container readiness
+        run: |
+          docker run --detach --name member-mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for attempt in {1..30}; do
+            if docker exec member-mongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' | grep -q 1; then break; fi
+            sleep 1
+          done
+          docker exec member-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for attempt in {1..30}; do
+            if docker exec member-mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then break; fi
+            sleep 1
+          done
+          test_db='mongodb://127.0.0.1:27017/member_ci?replicaSet=rs0&directConnection=true'
+          for attempt in 1 2; do
+            docker run --rm --network host --env "DATABASE_URL=$test_db" me-guild-migrator:ci
+          done
+          docker run --detach --name member-web --network host --env "DATABASE_URL=$test_db" --env NEXTAUTH_URL=https://member.example.test --env NEXTAUTH_SECRET=ci-member-session-secret-at-least-thirty-two --env ME_GUILD_BOT_API_URL=https://bot.example.test --env COMMUNITY_MEMBER_SECRET=ci-member-bridge-secret-at-least-thirty-two --env "APP_REVISION=$GITHUB_SHA" me-guild:ci
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health/ready > /tmp/member-health.json; then break; fi
+            sleep 2
+          done
+          node -e 'const h=require("/tmp/member-health.json");if(h.status!=="ok"||h.revision!==process.env.GITHUB_SHA)throw Error("readiness failed")'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/api/organization-wallets)" = 401
+
+  deploy-production:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Queue Resource blue-green deployment
+        env:
+          RESOURCE_DEPLOY_TOKEN: ${{ secrets.RESOURCE_DEPLOY_TOKEN }}
+        run: |
+          test -n "$RESOURCE_DEPLOY_TOKEN"
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-all-errors \
+            --request POST \
+            --header "Authorization: Bearer $RESOURCE_DEPLOY_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{\"deployment\":\"me-guild\",\"commitSha\":\"${GITHUB_SHA}\"}" \
+            https://resource.me-prompt-technology.com/api/v1/auto-deploy/hooks/redeploy
+      - name: Wait for the requested revision to become live
+        env:
+          RESOURCE_DEPLOY_TOKEN: ${{ secrets.RESOURCE_DEPLOY_TOKEN }}
+        run: |
+          status_file="$(mktemp)"
+          for attempt in $(seq 1 90); do
+            curl --fail-with-body --silent --show-error \
+              --retry 3 --retry-all-errors \
+              --header "Authorization: Bearer $RESOURCE_DEPLOY_TOKEN" \
+              --output "$status_file" \
+              "https://resource.me-prompt-technology.com/api/v1/auto-deploy/hooks/status?deployment=me-guild"
+            IFS=$'\t' read -r deploy_status commit_sha busy has_error < <(node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data; console.log([d.status,d.commitSha||"-",d.busy?"true":"false",d.error?"true":"false"].join("\t"))' "$status_file")
+            echo "deployment status=$deploy_status commit=$commit_sha busy=$busy attempt=$attempt"
+            if [ "$deploy_status" = "LIVE" ] && [ "$busy" = "false" ]; then
+              test "$has_error" = "false"
+              test "$commit_sha" = "$GITHUB_SHA"
+              exit 0
+            fi
+            if [ "$deploy_status" = "FAILED" ]; then
+              node -e 'console.error(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.error||"deployment failed")' "$status_file"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for me-guild deployment"
+          exit 1
