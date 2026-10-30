@@ -74,3 +74,9 @@
   .console h2 { font-size:19px; }.console .balance { font-size:30px; }
 }
 @media(prefers-reduced-motion:reduce) { .console * { transition:none!important; scroll-behavior:auto!important; } }
+
+.picker { margin:17px 0; }
+.console .picker label { margin:0 0 7px; }
+.console .pickerHint { margin:7px 0; font-size:12px; }
+.console .picker button { margin-top:8px; min-height:38px; padding:6px 14px; font-size:12px; background:#fff; color:#43516b; border-color:#d9dee8; }
+.console .textButton { padding:6px 0; min-height:36px; border:0; border-radius:0; background:none; box-shadow:none; color:#a5334d; font-size:12px; text-align:left; }

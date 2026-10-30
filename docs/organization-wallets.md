@@ -14,3 +14,7 @@
 หน้ากระเป๋าใช้ Noto Sans Thai โทนฟ้า–คอรัล การ์ดสีขาว และปุ่มทรงมน โดยอ้างอิงทิศทางภาพจาก https://friendzoneth.me-prompt-technology.com/ บนมือถือจัดเป็นคอลัมน์เดียวและเลื่อนตารางประวัติภายในกรอบได้
 
 คอมโพเนนต์และ CSS ของหน้ากระเป๋าตรงกันในทั้งสามเว็บ หากแก้พฤติกรรมการยืนยัน/ลองรายการเดิม ต้องปรับให้ตรงกันทุกสำเนา โดยรักษารหัสรายการเดิมเมื่อไม่ทราบผลชำระเงิน
+
+## Wallet dropdowns
+
+Recipients, support destinations, service servers and committee members can be selected by name. Searches support bounded results, retry and additional organization pages. Personal suggestions are restricted to the selected organization and require fresh manager authorization; an exact Discord ID remains available for outside recipients. Organization suggestions contain only names and identifiers of active provisioned wallets. No balances, history, email or phone numbers are returned. Recipient and authority checks still run before mutation, with the existing confirmation and operation-key recovery.
