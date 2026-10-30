@@ -41,7 +41,12 @@ export const authOptions: NextAuthOptions = {
         },
       },
     })] : []),
-    ...(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET ? [DiscordProvider({ clientId: process.env.DISCORD_CLIENT_ID, clientSecret: process.env.DISCORD_CLIENT_SECRET, authorization: { params: { scope: "identify email" } } })] : []),
+    ...(process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET ? [DiscordProvider({
+      clientId: process.env.DISCORD_CLIENT_ID,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      issuer: "https://discord.com",
+      authorization: { params: { scope: "identify email" } },
+    })] : []),
   ],
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
