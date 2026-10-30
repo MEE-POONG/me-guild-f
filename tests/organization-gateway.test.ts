@@ -35,3 +35,16 @@ test("gateway signs the authenticated identity and exact cursor/body; browser ac
   assert.equal(response.headers.get("Cache-Control"), "private, no-store");
   await assert.rejects(forwardOrganization(new Request("https://web.test/api"), actor, "member", { base: "http://bot.test", secret, origin: "https://web.test", production: true }), { status: 503 });
 });
+
+test("dropdown searches encode names and enforce source scope without forwarding identity", () => {
+  const input = new URL("https://web.test/api?options=1&kind=PERSONAL&sourceKind=GUILD&sourceId=" + "a".repeat(24));
+  input.searchParams.set("q", "เพื่อน & #/"); input.searchParams.set("actor", "999999999999999999");
+  const result = new URL(organizationPath(new Request(input)), "https://bot.test");
+  assert.equal(result.pathname, "/organization-wallets/options");
+  assert.equal(result.searchParams.get("q"), "เพื่อน & #/");
+  assert.equal(result.searchParams.get("sourceId"), "a".repeat(24));
+  assert.equal(result.searchParams.has("actor"), false);
+  for (const query of ["kind=PERSONAL", "kind=GUILD&cursor=../admin", "kind=GUILD&q=" + "x".repeat(81)])
+    assert.throws(() => organizationPath(new Request("https://web.test/api?options=1&" + query)));
+  assert.throws(() => organizationPath(new Request(input, { method: "POST" })));
+});

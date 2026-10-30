@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import styles from "./organization-wallets.module.css";
+import { WalletSelect, type WalletOption } from "./wallet-select";
 
 type Kind = "GUILD" | "DISCORD_SERVER";
 type Ref = { kind: Kind; externalId: string };
@@ -9,12 +10,13 @@ type Item = Ref & { name: string; status: string };
 type Entry = { id: string; direction: string; amountCopper: string; reference: string; description: string; postedAt: string; actorDiscordId: string | null };
 type Motion = { id: string; action: string; targetDiscordId: string; reason: string; status: string; electorate: string[]; approvedBy: string[]; expiresAt: string };
 type Closure = { id: string; recipientName: string; amountCopper: string; status: string; reason: string; decisionNote?: string };
-type Detail = { organization: Item & { balanceCopper: string; reservedCopper: string; entries: Entry[]; nextCursor: string | null; closures: Closure[] }; actorDiscordId: string; managerIds: string[]; committeeIds: string[]; motions: Motion[] };
+type Detail = { organization: Item & { balanceCopper: string; reservedCopper: string; entries: Entry[]; nextCursor: string | null; closures: Closure[] }; actorDiscordId: string; managerIds: string[]; committeeIds: string[]; motions: Motion[]; members?: WalletOption[] };
 type Package = { id: string; type: string; name: string; priceCopper: number; durationDays: number };
 type Pending = { key: string; ref: Ref; actor: string; body: Record<string, unknown>; summary: string; attempted: boolean; done?: boolean; result?: string };
 const labels: Record<string, string> = { GUILD: "กิลด์", DISCORD_SERVER: "Discord server", PERSONAL: "บัญชีส่วนตัว", ACTIVE: "พร้อมใช้งาน", PAUSED: "พักรับและจ่าย", CLOSING: "ระงับยอด · รอปิดบัญชี", CLOSED: "ปิดแล้ว", PENDING: "รอดำเนินการ", APPROVED: "อนุมัติ", REJECTED: "ไม่อนุมัติ", EXPIRED: "หมดเวลา", CANCELLED: "ยกเลิกเพราะข้อมูลเปลี่ยน" };
 const money = (value: string | number) => BigInt(value).toLocaleString("th-TH") + " Copper";
 const query = (ref: Ref, extra?: Record<string, string>) => "?" + new URLSearchParams({ kind: ref.kind, id: ref.externalId, ...extra });
+const optionsEndpoint = (kind: string, source?: Ref) => "/api/organization-wallets?" + new URLSearchParams({ options: "1", kind, ...(source ? { sourceKind: source.kind, sourceId: source.externalId } : {}) });
 class OperationError extends Error {
   constructor(message: string, readonly code?: string) { super(message); }
 }
@@ -40,8 +42,13 @@ export function OrganizationWallets({ profileHref = "/profile" }: { profileHref?
   const [pending, setPending] = useState<Pending | null>(null), [packages, setPackages] = useState<Package[]>([]);
   const [action, setAction] = useState("transfer"), [recipientKind, setRecipientKind] = useState("PERSONAL");
   const [depositKind, setDepositKind] = useState<Kind>("GUILD");
+  const [manualRecipient, setManualRecipient] = useState(false), [motionAction, setMotionAction] = useState("APPOINT");
+  const [packagesLoaded, setPackagesLoaded] = useState(false);
   const requestSequence = useRef(0), lock = useRef(false);
   const current = items.find(item => item.kind + ":" + item.externalId === selected);
+  const members = detail?.members ?? [];
+  const memberName = (id: string) => members.find(member => member.value === id)?.label ?? id;
+  const serviceServers = items.filter(item => item.kind === "DISCORD_SERVER" && item.status === "ACTIVE");
   const storageKey = actor ? "organization-operation:v1:" + actor : "";
   const savePending = (value: Pending | null) => {
     if (!storageKey) throw new Error("กรุณาโหลดบัญชีก่อน");
@@ -76,9 +83,14 @@ export function OrganizationWallets({ profileHref = "/profile" }: { profileHref?
     setDetail(previous => append && previous ? { ...data, organization: { ...data.organization, entries: [...previous.organization.entries, ...data.organization.entries] } } : data);
   };
   const choose = (value: string) => {
-    setSelected(value); setDetail(null); setPackages([]);
+    ++requestSequence.current;
+    setSelected(value); setDetail(null); setPackages([]); setPackagesLoaded(false); setManualRecipient(false);
     const ref = items.find(item => item.kind + ":" + item.externalId === value);
-    if (ref) void run(() => loadDetail(ref));
+    if (ref) void run(async () => {
+      await loadDetail(ref);
+      const result = await api<{ packages: Package[] }>(query(ref), { action: "catalog" });
+      setPackages(result.packages); setPackagesLoaded(true);
+    });
   };
   const prepare = async (ref: Ref, body: Record<string, unknown>, summary: string) => {
     if (pending && !pending.done) throw new Error("กรุณาดำเนินการหรือยกเลิกรายการที่รอยืนยันก่อน");
@@ -155,37 +167,54 @@ export function OrganizationWallets({ profileHref = "/profile" }: { profileHref?
     </section>}
     <div className={styles.grid}>
       <section className={styles.card} id="organization-accounts"><div className={styles.cardHeading}><span className={styles.cardIcon} aria-hidden="true">M</span><h2>กระเป๋าที่คุณจัดการ</h2></div><p>แสดงยอดและประวัติเฉพาะผู้มีสิทธิ์จัดการเงิน</p>
-        <label>เลือกกระเป๋า<select value={selected} disabled={busy} onChange={event => choose(event.target.value)}><option value="">เลือกกิลด์หรือเซิร์ฟเวอร์</option>{items.map(item => <option key={item.kind + item.externalId} value={item.kind + ":" + item.externalId}>{labels[item.kind]} · {item.name}</option>)}</select></label>
+        <WalletSelect label="กระเป๋าที่ต้องการจัดการ" value={selected} disabled={busy} onChange={choose} required={false}
+          options={items.map(item => ({ value: item.kind + ":" + item.externalId, label: item.name, description: labels[item.kind] + " · " + (labels[item.status] ?? item.status) }))}
+          emptyMessage={actor ? "ยังไม่มีกระเป๋าที่คุณจัดการได้" : "กำลังโหลดกระเป๋า…"} />
         {actor && items.length === 0 && <p>ไม่พบกระเป๋าที่คุณมีสิทธิ์จัดการ คุณยังโอนสนับสนุนองค์กรจากบัญชีส่วนตัวได้</p>}
         {detail && current && <><p className={styles.status}>{labels[detail.organization.status] ?? detail.organization.status}</p><p className={styles.balance}>{money(detail.organization.balanceCopper)}</p><p>ยอดจอง {money(detail.organization.reservedCopper)}</p><p className={styles.mono}>{labels[current.kind]} ID: {current.externalId}</p>
-          <p>{current.kind === "GUILD" ? "ผู้จัดการเงิน: " + detail.managerIds.join(", ") : "เจ้าของเซิร์ฟเวอร์และผู้มีสิทธิ์ Discord Administrator"}</p>
+          <p>{current.kind === "GUILD" ? "ผู้จัดการเงิน: " + detail.managerIds.map(memberName).join(", ") : "เจ้าของเซิร์ฟเวอร์และผู้มีสิทธิ์ Discord Administrator"}</p>
           <form onSubmit={submitPayment}><h3>จ่ายเงิน / ขอปิดบัญชี</h3><label>รายการ<select value={action} onChange={event => setAction(event.target.value)}><option value="transfer">โอน ME Coin</option><option value="close">ยื่นขอปิดบัญชี</option></select></label>
             <label>ประเภทผู้รับ<select value={recipientKind} onChange={event => setRecipientKind(event.target.value)}>{["PERSONAL", "GUILD", "DISCORD_SERVER"].map(kind => <option key={kind} value={kind}>{labels[kind]}</option>)}</select></label>
-            <label>{recipientKind === "PERSONAL" ? "Discord User ID ผู้รับ" : "ID องค์กรผู้รับ"}<input name="recipient" required maxLength={24} autoComplete="off" /></label>
+            {recipientKind === "PERSONAL" && manualRecipient
+              ? <label>Discord ID ผู้รับ<input name="recipient" required pattern="[0-9]{15,22}" maxLength={22} inputMode="numeric" autoComplete="off" /></label>
+              : <WalletSelect key={selected + recipientKind} name="recipient" label="ผู้รับเงิน" endpoint={optionsEndpoint(recipientKind, current)} disabled={busy}
+                  emptyMessage={recipientKind === "PERSONAL" ? "ไม่พบสมาชิก ลองค้นหาชื่อหรือใช้ Discord ID สำหรับผู้รับนอกรายชื่อ" : "ไม่พบองค์กรที่พร้อมรับเงิน ลองค้นหาด้วยชื่ออื่น"} />}
+            {recipientKind === "PERSONAL" && <button className={styles.textButton} type="button" disabled={busy} onClick={() => setManualRecipient(value => !value)}>{manualRecipient ? "กลับไปเลือกจากรายชื่อ" : "ผู้รับอยู่นอกรายชื่อ? ระบุ Discord ID"}</button>}
             {action === "transfer" && <label>จำนวน Copper<input name="amount" type="number" min="1" max="100000000" step="1" required /></label>}
             <label>{action === "close" ? "เหตุผลการปิดบัญชี" : "รายละเอียดรายการ"}<textarea name="reason" required minLength={3} maxLength={action === "close" ? 500 : 200} /></label>
             <button disabled={busy || (!!pending && !pending.done) || detail.organization.status === "CLOSED" || (action === "transfer" && detail.organization.status !== "ACTIVE")}>ตรวจสอบผู้รับและรายการ</button>
           </form></>}
       </section>
-      <section className={styles.card} id="organization-support"><div className={styles.cardHeading}><span className={styles.cardIcon + " " + styles.cardIconBlue} aria-hidden="true">↗</span><h2>โอนสนับสนุนองค์กร</h2></div><p>จ่ายจากบัญชี ME Coin ส่วนตัวของคุณ ไม่จำเป็นต้องเป็นสมาชิกขององค์กร</p><form onSubmit={submitDeposit}><label>ประเภทองค์กร<select value={depositKind} onChange={event => setDepositKind(event.target.value as Kind)}><option value="GUILD">กิลด์</option><option value="DISCORD_SERVER">Discord server</option></select></label><label>ID องค์กร<input name="id" required maxLength={24} autoComplete="off" /></label><label>จำนวน Copper<input name="amount" type="number" min="1" max="100000000" step="1" required /></label><label>รายละเอียด<textarea name="reason" required minLength={3} maxLength={200} /></label><button disabled={busy || !actor || (!!pending && !pending.done)}>ตรวจสอบก่อนโอน</button></form>
-        <p className={styles.hint}>กระเป๋ากิลด์และกระเป๋าเซิร์ฟเวอร์เป็นคนละบัญชี ใช้ ID ให้ตรงกับประเภทผู้รับ</p>
+      <section className={styles.card} id="organization-support"><div className={styles.cardHeading}><span className={styles.cardIcon + " " + styles.cardIconBlue} aria-hidden="true">↗</span><h2>โอนสนับสนุนองค์กร</h2></div><p>จ่ายจากบัญชี ME Coin ส่วนตัวของคุณ ไม่จำเป็นต้องเป็นสมาชิกขององค์กร</p><form onSubmit={submitDeposit}><label>ประเภทองค์กร<select value={depositKind} onChange={event => setDepositKind(event.target.value as Kind)}><option value="GUILD">กิลด์</option><option value="DISCORD_SERVER">Discord server</option></select></label><WalletSelect key={depositKind} name="id" label="องค์กรที่ต้องการสนับสนุน" endpoint={actor ? optionsEndpoint(depositKind) : undefined} disabled={busy || !actor} emptyMessage="ไม่พบองค์กรที่พร้อมรับเงิน ลองค้นหาด้วยชื่ออื่น" /><label>จำนวน Copper<input name="amount" type="number" min="1" max="100000000" step="1" required /></label><label>รายละเอียด<textarea name="reason" required minLength={3} maxLength={200} /></label><button disabled={busy || !actor || (!!pending && !pending.done)}>ตรวจสอบก่อนโอน</button></form>
+        <p className={styles.hint}>เลือกชื่อองค์กร แล้วตรวจสอบผู้รับและยอดเงินก่อนยืนยัน กระเป๋ากิลด์และเซิร์ฟเวอร์เป็นคนละบัญชี</p>
       </section>
     </div>
     {detail && current && <>
-      <section className={styles.card} id="organization-packages"><h2>ซื้อแพ็กเกจ / บริการ</h2><p>ชำระจาก {current.name} · ต้องมีสิทธิ์จัดการ Discord server ที่รับบริการด้วย</p><button disabled={busy} onClick={() => void run(async () => { const result = await api<{ packages: Package[] }>(query(current), { action: "catalog" }); setPackages(result.packages); })}>โหลดแพ็กเกจและราคาปัจจุบัน</button>
+      <section className={styles.card} id="organization-packages"><h2>ซื้อแพ็กเกจ / บริการ</h2><p>ชำระจาก {current.name} · ต้องมีสิทธิ์จัดการ Discord server ที่รับบริการด้วย</p><button disabled={busy} onClick={() => void run(async () => { const result = await api<{ packages: Package[] }>(query(current), { action: "catalog" }); setPackages(result.packages); setPackagesLoaded(true); })}>อัปเดตราคาแพ็กเกจ</button>
+        {packagesLoaded && packages.length === 0 && <p>ยังไม่มีแพ็กเกจที่เปิดขาย</p>}
         {packages.length > 0 && <form className={styles.inlineForm} onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(async () => {
           const chosen = packages.find(item => item.type + ":" + item.id === form.get("package")); if (!chosen) return;
-          const body = { action: "quote", packageType: chosen.type, packageId: chosen.id, serverId: String(form.get("serverId")).trim() };
+          const server = serviceServers.find(item => item.externalId === form.get("serverId"));
+          if (!server) throw new Error("กรุณาเลือกเซิร์ฟเวอร์ที่คุณมีสิทธิ์จัดการ");
+          const body = { action: "quote", packageType: chosen.type, packageId: chosen.id, serverId: server.externalId };
           const result = await api<{ package: Package }>(query(current), body);
-          await prepare(current, { ...body, action: "purchase", expectedCopper: result.package.priceCopper }, current.name + " → " + result.package.name + "\nDiscord server " + body.serverId + "\n" + money(result.package.priceCopper) + " · " + result.package.durationDays + " วัน");
-        }); }}><label>แพ็กเกจ<select name="package">{packages.map(item => <option key={item.type + item.id} value={item.type + ":" + item.id}>{item.name} · {money(item.priceCopper)}</option>)}</select></label><label>Discord Server ID ที่รับบริการ<input name="serverId" required defaultValue={current.kind === "DISCORD_SERVER" ? current.externalId : ""} /></label><button disabled={busy || (!!pending && !pending.done) || detail.organization.status !== "ACTIVE"}>ตรวจสอบราคา</button></form>}
+          await prepare(current, { ...body, action: "purchase", expectedCopper: result.package.priceCopper }, current.name + " → " + result.package.name + "\nเซิร์ฟเวอร์ " + server.name + " (" + server.externalId + ")" + "\n" + money(result.package.priceCopper) + " · " + result.package.durationDays + " วัน");
+        }); }}><WalletSelect name="package" label="แพ็กเกจ" disabled={busy} options={packages.map(item => ({ value: item.type + ":" + item.id, label: item.name, description: money(item.priceCopper) + " · " + item.durationDays + " วัน" }))} />
+          <WalletSelect key={selected} name="serverId" label="เซิร์ฟเวอร์ที่รับบริการ" disabled={busy}
+            defaultValue={current.kind === "DISCORD_SERVER" ? current.externalId : serviceServers.length === 1 ? serviceServers[0].externalId : ""}
+            options={serviceServers.map(item => ({ value: item.externalId, label: item.name, description: item.externalId }))}
+            emptyMessage="ไม่พบเซิร์ฟเวอร์ที่คุณเป็นเจ้าของหรือมีสิทธิ์ Discord Administrator" /><button disabled={busy || (!!pending && !pending.done) || detail.organization.status !== "ACTIVE"}>ตรวจสอบราคา</button></form>}
       </section>
-      {current.kind === "GUILD" && <section className={styles.card} id="organization-committee"><h2>กรรมการกิลด์</h2><p>ต้องเห็นชอบครบทุกคนภายใน 72 ชั่วโมง เจ้าของ ผู้ร่วมก่อตั้ง และกรรมการนับคนละหนึ่งเสียง ผู้ถูกเสนอถอดถอนไม่ได้ลงมติ</p><p>กรรมการปัจจุบัน: {detail.committeeIds.join(", ") || "ยังไม่มี"}</p>
+      {current.kind === "GUILD" && <section className={styles.card} id="organization-committee"><h2>กรรมการกิลด์</h2><p>ต้องเห็นชอบครบทุกคนภายใน 72 ชั่วโมง เจ้าของ ผู้ร่วมก่อตั้ง และกรรมการนับคนละหนึ่งเสียง ผู้ถูกเสนอถอดถอนไม่ได้ลงมติ</p><p>กรรมการปัจจุบัน: {detail.committeeIds.map(memberName).join(", ") || "ยังไม่มี"}</p>
         <form className={styles.inlineForm} onSubmit={event => { event.preventDefault(); const form = new FormData(event.currentTarget); void run(async () => {
           const motionAction = String(form.get("motionAction")), targetDiscordId = String(form.get("target")).trim(), reason = String(form.get("reason")).trim();
-          await prepare(current, { action: "propose", motionAction, targetDiscordId, reason }, (motionAction === "APPOINT" ? "เสนอแต่งตั้ง " : "เสนอถอดถอน ") + targetDiscordId + "\n" + reason);
-        }); }}><label>คำเสนอ<select name="motionAction"><option value="APPOINT">แต่งตั้ง</option><option value="REMOVE">ถอดถอน</option></select></label><label>Discord User ID สมาชิก<input name="target" required /></label><label>เหตุผล<textarea name="reason" minLength={3} maxLength={500} required /></label><button disabled={busy || (!!pending && !pending.done)}>ตรวจสอบคำเสนอ</button></form>
-        {detail.motions.map(motion => <article className={styles.record} key={motion.id}><strong>{motion.action === "APPOINT" ? "แต่งตั้ง" : "ถอดถอน"} {motion.targetDiscordId} · {labels[motion.status] ?? motion.status}</strong><p>{motion.reason}</p><p>เห็นชอบ {motion.approvedBy.length}/{motion.electorate.length} · หมดเวลา {new Date(motion.expiresAt).toLocaleString("th-TH")}</p><small>มติ {motion.id}</small>
+          const member = members.find(item => item.value === targetDiscordId);
+          if (!member) throw new Error("กรุณาเลือกสมาชิกกิลด์จากรายชื่อ");
+          await prepare(current, { action: "propose", motionAction, targetDiscordId, reason }, (motionAction === "APPOINT" ? "เสนอแต่งตั้ง " : "เสนอถอดถอน ") + member.label + " (" + targetDiscordId + ")\n" + reason);
+        }); }}><label>คำเสนอ<select name="motionAction" value={motionAction} onChange={event => setMotionAction(event.target.value)}><option value="APPOINT">แต่งตั้ง</option><option value="REMOVE">ถอดถอน</option></select></label><WalletSelect key={selected + motionAction} name="target" label={motionAction === "APPOINT" ? "สมาชิกที่ต้องการแต่งตั้ง" : "กรรมการที่ต้องการถอดถอน"} disabled={busy}
+          options={members.filter(member => motionAction === "APPOINT" ? !detail.committeeIds.includes(member.value) : detail.committeeIds.includes(member.value))}
+          emptyMessage={motionAction === "APPOINT" ? "ไม่มีสมาชิกที่สามารถเสนอแต่งตั้งได้" : "ยังไม่มีกรรมการที่สามารถถอดถอนได้"} /><label>เหตุผล<textarea name="reason" minLength={3} maxLength={500} required /></label><button disabled={busy || (!!pending && !pending.done)}>ตรวจสอบคำเสนอ</button></form>
+        {detail.motions.map(motion => <article className={styles.record} key={motion.id}><strong>{motion.action === "APPOINT" ? "แต่งตั้ง" : "ถอดถอน"} {memberName(motion.targetDiscordId)} · {labels[motion.status] ?? motion.status}</strong><p>{motion.reason}</p><p>เห็นชอบ {motion.approvedBy.length}/{motion.electorate.length} · หมดเวลา {new Date(motion.expiresAt).toLocaleString("th-TH")}</p><small>มติ {motion.id}</small>
           {motion.status === "PENDING" && motion.electorate.includes(actor) && !motion.approvedBy.includes(actor) && <div className={styles.row}>{[true, false].map(approve => <button key={String(approve)} disabled={busy || (!!pending && !pending.done)} onClick={() => void run(() => prepare(current, { action: "vote", motionId: motion.id, approve }, (approve ? "เห็นชอบ" : "ไม่เห็นชอบ") + "มติ " + motion.id))}>{approve ? "เห็นชอบ" : "ไม่เห็นชอบ"}</button>)}</div>}
         </article>)}
       </section>}

@@ -5,6 +5,21 @@ export class OrganizationGatewayError extends Error {
 }
 export function organizationPath(request: Request, prefix = "/organization-wallets") {
   const q = new URL(request.url).searchParams;
+  if (q.get("options") === "1") {
+    const kind = q.get("kind"), search = (q.get("q") ?? "").trim();
+    const sourceKind = q.get("sourceKind"), sourceId = q.get("sourceId"), cursor = q.get("cursor");
+    if (request.method !== "GET" || !kind || !["PERSONAL", "GUILD", "DISCORD_SERVER"].includes(kind) || search.length > 80)
+      throw new OrganizationGatewayError("คำค้นหารายชื่อไม่ถูกต้อง");
+    if ((sourceKind || sourceId || kind === "PERSONAL") && (!sourceKind || !sourceId ||
+      !["GUILD", "DISCORD_SERVER"].includes(sourceKind) || !(sourceKind === "GUILD" ? /^[a-f0-9]{24}$/.test(sourceId) : /^\d{15,22}$/.test(sourceId))))
+      throw new OrganizationGatewayError("เลือกกระเป๋าต้นทางก่อนค้นหาสมาชิก");
+    if (cursor && (kind === "PERSONAL" || !/^[a-f0-9]{24}$/.test(cursor)))
+      throw new OrganizationGatewayError("รหัสหน้ารายชื่อไม่ถูกต้อง");
+    const params = new URLSearchParams({ kind, q: search });
+    if (sourceKind && sourceId) { params.set("sourceKind", sourceKind); params.set("sourceId", sourceId); }
+    if (cursor) params.set("cursor", cursor);
+    return prefix + "/options?" + params;
+  }
   const kind = q.get("kind"), id = q.get("id");
   if (!kind && !id && request.method === "GET") return prefix;
   if (!kind || !id || !["GUILD", "DISCORD_SERVER", "PERSONAL"].includes(kind) ||
