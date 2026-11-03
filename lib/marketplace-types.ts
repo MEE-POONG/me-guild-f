@@ -1,8 +1,12 @@
 export type MarketItem = { itemId: string; name: string; description: string | null; imageUrl: string | null; rarity: string | null; quantity: number };
 export type MarketOffer = { itemId: string; quantity: number; name: string };
+export type MarketTicket = { guildId: string; quantity: number };
+export type MarketTicketBalance = { guildId: string; guildName: string; balance: number };
 export type MarketTrade = {
   id: string; guildId: string; participantIds: string[]; offers: Record<string, MarketOffer[]>;
   copperOffers?: Record<string, number> | null; copperTransactionId?: string | null;
+  ticketOffers?: Record<string, MarketTicket[]> | null;
+  invitation?: { state: "queued" | "sent" | "failed" | "uncertain" | "cancelled" } | null;
   lockedIds: string[]; confirmedIds: string[]; status: string; revision: number; expiresAt: string;
 };
 export type MarketAuction = {
@@ -14,6 +18,7 @@ export type MarketSnapshot = {
   member: { discordId: string; displayName: string };
   guilds: { id: string; name: string }[]; selectedGuildId: string | null;
   inventory: MarketItem[]; trades: MarketTrade[]; auctions: MarketAuction[];
+  tickets?: MarketTicketBalance[];
   ledger: { id: string; kind: string; amountCopper: number; auctionId: string | null; createdAt: string }[];
   wallet: { balanceCopper: number | null; configured: boolean; error?: string };
   rules: { bidFeeCopper: number; bidIncrementCopper: number };
@@ -24,12 +29,15 @@ export type MarketView = "inventory" | "trades" | "auctions";
 export const MARKET_MAX_TRADE_COPPER = 1_000_000;
 export function parseTradeCopper(value: string): number | null {
   const trimmed = value.trim();
-  if (!/^(?:0|[1-9]\d{0,6})$/.test(trimmed)) return null;
-  const amount = Number(trimmed);
-  return amount <= MARKET_MAX_TRADE_COPPER ? amount : null;
+  if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(trimmed)) return null;
+  const amount = Number(trimmed.replace(/,/g, ""));
+  return Number.isSafeInteger(amount) && amount <= MARKET_MAX_TRADE_COPPER ? amount : null;
 }
 export function tradeCopper(trade: MarketTrade, memberId: string): number {
   return trade.copperOffers?.[memberId] ?? 0;
+}
+export function tradeTicketQuantity(trade: MarketTrade, memberId: string): number {
+  return (trade.ticketOffers?.[memberId] ?? []).find((ticket) => ticket.guildId === trade.guildId)?.quantity ?? 0;
 }
 export function pendingTrade(trade: Pick<MarketTrade, "status">): boolean {
   return ["LOCKING", "SETTLING", "CANCELLING"].includes(trade.status);
@@ -37,7 +45,8 @@ export function pendingTrade(trade: Pick<MarketTrade, "status">): boolean {
 export function tradeOfferSummary(trade: MarketTrade, memberId: string): string {
   return trade.participantIds.map((id) => {
     const items = (trade.offers[id] ?? []).map((item) => `${item.name} × ${item.quantity.toLocaleString("th-TH")}`).join(", ") || "ไม่มีไอเทม";
-    return `${id === memberId ? "คุณส่ง" : `คู่แลก ${id} ส่ง`}: ${tradeCopper(trade, id).toLocaleString("th-TH")} Copper และ ${items}`;
+    const tickets = tradeTicketQuantity(trade, id);
+    return `${id === memberId ? "คุณส่ง" : `คู่แลก ${id} ส่ง`}: ${tradeCopper(trade, id).toLocaleString("th-TH")} Copper และ ${items}${tickets ? ` และ ตั๋ว × ${tickets.toLocaleString("th-TH")}` : ""}`;
   }).join(" • ");
 }
 export function tradeConfirmationCurrent(action: MarketAction, trades: MarketTrade[]): boolean {
@@ -48,9 +57,10 @@ export function tradeConfirmationCurrent(action: MarketAction, trades: MarketTra
 export function marketplaceDestination(query: Record<string, string | string[] | undefined>) {
   const guildId = typeof query.guildId === "string" && /^\d{16,22}$/.test(query.guildId) ? query.guildId : "";
   const auctionId = typeof query.auction === "string" && /^[a-f\d]{24}$/.test(query.auction) ? query.auction : "";
+  const tradeId = typeof query.trade === "string" && /^[a-f\d]{24}$/.test(query.trade) ? query.trade : "";
   const composeAuction = query.compose === "auction";
-  const view: MarketView = composeAuction || auctionId ? "auctions" : query.view === "trades" || query.view === "auctions" ? query.view : "inventory";
-  return { guildId, auctionId, view, composeAuction };
+  const view: MarketView = tradeId ? "trades" : composeAuction || auctionId ? "auctions" : query.view === "trades" || query.view === "auctions" ? query.view : "inventory";
+  return { guildId, auctionId, tradeId, view, composeAuction };
 }
 
 export function auctionBidCost(auction: Pick<MarketAuction, "currentPriceCopper" | "highestBidderId">, memberId: string) {
@@ -77,11 +87,14 @@ export const marketLedgerLabel: Record<string, string> = {
   AUCTION_BID: "ยกไม้ประมูล", AUCTION_REFUND: "คืนเงินประมูล", AUCTION_PAYOUT: "รับเงินปิดประมูล",
 };
 
-export function marketplaceLoginUrl(guildId: string, auctionId: string, options: { view?: MarketView; composeAuction?: boolean } = {}): string {
+export function marketplaceLoginUrl(guildId: string, auctionId: string, options: { view?: MarketView; composeAuction?: boolean; tradeId?: string } = {}): string {
   const query = new URLSearchParams();
   if (/^\d{16,22}$/.test(guildId)) query.set("guildId", guildId);
   if (/^[a-f\d]{24}$/.test(auctionId)) query.set("auction", auctionId);
-  if (options.composeAuction) {
+  if (options.tradeId && /^[a-f\d]{24}$/.test(options.tradeId)) {
+    query.set("trade", options.tradeId);
+    query.set("view", "trades");
+  } else if (options.composeAuction) {
     query.set("view", "auctions");
     query.set("compose", "auction");
   } else if (options.view === "trades" || options.view === "auctions") query.set("view", options.view);

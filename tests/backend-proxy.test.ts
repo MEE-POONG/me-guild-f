@@ -9,12 +9,12 @@ import {
   type BackendEnvironment,
 } from "../lib/backend-config";
 import { allowedAdventureMethod, proxyAdventureRequest } from "../lib/backend-proxy";
-import { adventureMemberRedirect } from "../lib/adventure-member-policy";
+import { ADVENTURE_GOOGLE_SCOPE, adventureMemberRedirect } from "../lib/adventure-member-policy";
 
 const frontend = "https://community.example.test";
-const backend = "https://backend.example.test";
+const backend = "https://office.example.test";
 const campaignId = "aaaaaaaaaaaaaaaaaaaaaaaa";
-const env: BackendEnvironment = { NODE_ENV: "production", ME_GUILD_BACKEND_URL: backend, ME_GUILD_FRONTEND_URL: frontend, ME_GUILD_OFFICE_URL: "https://office.example.test" };
+const env: BackendEnvironment = { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: frontend, ME_GUILD_OFFICE_URL: backend };
 type Call = { url: string; options: RequestInit };
 
 function fixture(handler: (call: Call) => Response | Promise<Response> = () => Response.json({ source: "upstream-fixture" })) {
@@ -39,34 +39,49 @@ function privateResponse(response: Response, status: number) {
   assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
 }
 
-test("origin configuration accepts only explicit root origins and safe frontend/Office protocols", () => {
+test("Office URL alone configures the shared backend and Office origin", () => {
+  const officeOnly: BackendEnvironment = { NODE_ENV: "production", ME_GUILD_OFFICE_URL: "https://office.example.test:8443/" };
+  assert.equal(getBackendOrigin(officeOnly), "https://office.example.test:8443");
+  assert.equal(getOfficeOrigin(officeOnly), "https://office.example.test:8443");
+  for (const parse of [getBackendOrigin, getOfficeOrigin]) {
+    assert.throws(() => parse({ NODE_ENV: "production", ME_GUILD_FRONTEND_URL: frontend }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+  }
+});
+
+test("origin configuration accepts only explicit root origins and HTTPS outside local development", () => {
   assert.equal(getBackendOrigin(env), backend);
   assert.equal(getFrontendOrigin(env), frontend);
-  assert.equal(getOfficeOrigin(env), "https://office.example.test");
+  assert.equal(getOfficeOrigin(env), backend);
   assert.equal(getBackendOrigin({ NODE_ENV: "development" }), "http://localhost:3002");
   assert.equal(getFrontendOrigin({ NODE_ENV: "development" }), "http://localhost:3000");
   assert.equal(getOfficeOrigin({ NODE_ENV: "development" }), "http://localhost:3002");
-  assert.equal(getBackendOrigin({ ...env, ME_GUILD_BACKEND_URL: "http://api.internal:3002" }), "http://api.internal:3002");
   for (const value of ["", "not-a-url", "javascript:alert(1)", "ftp://example.test", "https://user:password@example.test", "https://example.test/api", "https://example.test/?query=1", "https://example.test/#fragment"]) {
-    assert.throws(() => getBackendOrigin({ ...env, ME_GUILD_BACKEND_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+    assert.throws(() => getBackendOrigin({ ...env, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
     assert.throws(() => getFrontendOrigin({ ...env, ME_GUILD_FRONTEND_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
     assert.throws(() => getOfficeOrigin({ ...env, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
   }
   for (const parse of [getBackendOrigin, getFrontendOrigin, getOfficeOrigin]) assert.throws(() => parse({ NODE_ENV: "production" }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
-  for (const parse of [getFrontendOrigin, getOfficeOrigin]) {
-    assert.throws(() => parse({ NODE_ENV: "production", ME_GUILD_FRONTEND_URL: "http://localhost:3000", ME_GUILD_OFFICE_URL: "http://localhost:3002" }));
-    assert.throws(() => parse({ NODE_ENV: "development", ME_GUILD_FRONTEND_URL: "http://public.example.test", ME_GUILD_OFFICE_URL: "http://public.example.test" }));
+  for (const parse of [getBackendOrigin, getFrontendOrigin, getOfficeOrigin]) {
+    for (const value of ["http://localhost:3002", "http://127.0.0.1:3002", "http://[::1]:3002"]) {
+      assert.equal(parse({ NODE_ENV: "development", ME_GUILD_FRONTEND_URL: value, ME_GUILD_OFFICE_URL: value }), value);
+      assert.throws(() => parse({ NODE_ENV: "production", ME_GUILD_FRONTEND_URL: value, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+    }
+    for (const value of ["http://public.example.test", "http://api.internal:3002"]) {
+      for (const NODE_ENV of ["production", "development"]) {
+        assert.throws(() => parse({ NODE_ENV, ME_GUILD_FRONTEND_URL: value, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+      }
+    }
   }
 });
 
 test("only the public member/project method and path combinations are allowlisted", () => {
-  const reads = [["rewards"], ["progression"], ["skills"], ["achievements"], ["guild-room"], ["raffles"], ["projects", "me-guild-bangkok"], ["member-auth", "status"], ["member-auth", "csrf"], ["member-auth", "session"], ["member-auth", "error"], ["member-auth", "callback", "discord"]];
+  const reads = [["rewards"], ["progression"], ["skills"], ["achievements"], ["guild-room"], ["raffles"], ["projects", "me-guild-bangkok"], ["member-auth", "status"], ["member-auth", "csrf"], ["member-auth", "session"], ["member-auth", "error"], ["member-auth", "callback", "discord"], ["member-auth", "callback", "google"]];
   for (const path of reads) {
     assert.equal(allowedAdventureMethod(path, "GET"), true, path.join("/"));
     assert.equal(allowedAdventureMethod(path, "HEAD"), true, path.join("/"));
     for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) assert.equal(allowedAdventureMethod(path, method), false);
   }
-  for (const path of [["achievements", "sync"], ["raffles", campaignId, "entries"], ["member-auth", "signin", "discord"], ["member-auth", "signout"]]) {
+  for (const path of [["achievements", "sync"], ["raffles", campaignId, "entries"], ["member-auth", "signin", "discord"], ["member-auth", "signin", "google"], ["member-auth", "signout"]]) {
     assert.equal(allowedAdventureMethod(path, "POST"), true);
     for (const method of ["GET", "HEAD", "PUT", "PATCH", "DELETE"]) assert.equal(allowedAdventureMethod(path, method), false);
   }
@@ -104,7 +119,7 @@ test("Discord login may return to own-skill page while external and nested membe
 });
 
 test("traversal, arbitrary upstream paths, Office auth/admin and malformed IDs are denied before fetch", async () => {
-  const paths = [[], [".."], ["..", "raffles"], ["projects", ".."], ["projects", "%2e%2e"], ["projects", "a/b"], ["projects", "https://attacker.test"], ["projects", "project?other=1"], ["projects", "Valid-Project"], ["projects", "ab", "extra"], ["raffles", "invalid", "entries"], ["raffles", campaignId, "stage"], ["raffles", campaignId, "entries", "extra"], ["auth", "session"], ["office"], ["content", "projects"], ["member-auth", "signin", "google"], ["member-auth", "callback", "discord", "extra"], ["member-auth", "../auth"], ["member-auth", "providers"], ["/api/auth/signout"]];
+  const paths = [[], [".."], ["..", "raffles"], ["projects", ".."], ["projects", "%2e%2e"], ["projects", "a/b"], ["projects", "https://attacker.test"], ["projects", "project?other=1"], ["projects", "Valid-Project"], ["projects", "ab", "extra"], ["raffles", "invalid", "entries"], ["raffles", campaignId, "stage"], ["raffles", campaignId, "entries", "extra"], ["auth", "session"], ["office"], ["content", "projects"], ["member-auth", "signin", "github"], ["member-auth", "callback", "discord", "extra"], ["member-auth", "callback", "google", "extra"], ["member-auth", "../auth"], ["member-auth", "providers"], ["/api/auth/signout"]];
   for (const path of paths) {
     const f = fixture();
     const response = await proxyAdventureRequest(request(), path, { env, fetch: f.fetcher });
@@ -128,8 +143,8 @@ test("POST requires the exact frontend Origin and rejects cross-site requests be
 });
 
 test("member cookie filters preserve only the exact isolated names and numbered session chunks", () => {
-  const good = ["me-guild-member.session-token=base", "me-guild-member.session-token.0=first", "me-guild-member.session-token.1=second", "me-guild-member.csrf-token=csrf", "me-guild-member.callback-url=callback", "me-guild-member.pkce.code_verifier=pkce", "me-guild-member.state=state", "me-guild-member.nonce=nonce"];
-  const bad = ["me-guild-office.session-token=office", "next-auth.session-token=legacy", "__Secure-next-auth.session-token=legacy-secure", "other=private", "me-guild-member.session-token.evil=lookalike", "me-guild-member.session-tokenx=lookalike", "me-guild-member.session-token.-1=negative", "prefix-me-guild-member.csrf-token=wrong", "me-guild-member.unknown=wrong"];
+  const good = ["me-guild-member.session-token=base", "me-guild-member.session-token.0=first", "me-guild-member.session-token.1=second", "me-guild-member.csrf-token=csrf", "me-guild-member.callback-url=callback", "me-guild-member.pkce.code_verifier=pkce", "me-guild-member.state=state", "me-guild-member.nonce=nonce", "me-guild-member.link-intent=opaque"];
+  const bad = ["me-guild-office.session-token=office", "next-auth.session-token=legacy", "__Secure-next-auth.session-token=legacy-secure", "other=private", "me-guild-member.session-token.evil=lookalike", "me-guild-member.session-tokenx=lookalike", "me-guild-member.session-token.-1=negative", "prefix-me-guild-member.csrf-token=wrong", "me-guild-member.link-intent.evil=wrong", "me-guild-member.unknown=wrong"];
   assert.equal(memberCookieHeader(null), "");
   assert.equal(memberCookieHeader([...bad, ...good].join("; ")), good.join("; "));
   for (const value of good) assert.equal(isMemberSetCookie(`${value}; Path=/; HttpOnly; SameSite=Lax`), true);
@@ -193,6 +208,47 @@ test("manual redirects allow local adventure pages and Discord authorization onl
   assert.equal(f.calls[0].options.redirect, "manual");
 });
 
+test("Google redirects require the matching provider route and the complete fixed OAuth request", async () => {
+  const target = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  target.search = new URLSearchParams({ client_id: "fixture.apps.googleusercontent.com", redirect_uri: `${frontend}/api/adventure/member-auth/callback/google`, scope: ADVENTURE_GOOGLE_SCOPE, response_type: "code", state: "fixture-state", code_challenge: "fixture-challenge", code_challenge_method: "S256", nonce: "fixture-nonce" }).toString();
+  const f = fixture(() => new Response(null, { status: 302, headers: { Location: target.toString() } }));
+  const response = await proxyAdventureRequest(mutation(), ["member-auth", "signin", "google"], { env, fetch: f.fetcher });
+  privateResponse(response, 302);
+  assert.equal(response.headers.get("Location"), target.toString());
+  for (const path of [["member-auth", "signin", "discord"], ["member-auth", "csrf"], ["raffles"]]) {
+    privateResponse(await proxyAdventureRequest(request("/api/adventure/raffles", { method: path[1] === "signin" ? "POST" : "GET", headers: { Origin: frontend } }), path, { env, fetch: f.fetcher }), 502);
+  }
+  const mutations: ((url: URL) => void)[] = [
+    url => { url.hostname = "accounts.google.com.evil.test"; },
+    url => { url.pathname = "/o/oauth2/auth"; },
+    url => { url.searchParams.set("redirect_uri", `${backend}/api/adventure/member-auth/callback/google`); },
+    url => { url.searchParams.set("scope", `${ADVENTURE_GOOGLE_SCOPE} https://www.googleapis.com/auth/drive`); },
+    url => { url.searchParams.set("response_type", "token"); },
+    url => { url.searchParams.delete("nonce"); },
+    url => { url.searchParams.delete("state"); },
+    url => { url.searchParams.delete("code_challenge"); },
+    url => { url.searchParams.set("code_challenge_method", "plain"); },
+    url => { url.searchParams.append("redirect_uri", "https://attacker.test/callback"); },
+  ];
+  for (const mutate of mutations) {
+    const invalid = new URL(target); mutate(invalid);
+    const upstream = fixture(() => new Response(null, { status: 302, headers: { Location: invalid.toString() } }));
+    privateResponse(await proxyAdventureRequest(mutation(), ["member-auth", "signin", "google"], { env, fetch: upstream.fetcher }), 502);
+  }
+});
+
+test("Google linking transport preserves the explicit form and exact opaque member cookie only", async () => {
+  const body = new URLSearchParams({ csrfToken: "fixture", callbackUrl: `${frontend}/adventure/login`, json: "true", intent: "link" }).toString();
+  const f = fixture(() => Response.json({ url: `${frontend}/adventure/login?error=MemberUnavailable` }, { headers: { "Set-Cookie": "me-guild-member.link-intent=opaque; Path=/; HttpOnly; SameSite=Lax; Secure" } }));
+  const input = request("/api/adventure/member-auth/signin/google", { method: "POST", body, headers: { Origin: frontend, "Content-Type": "application/x-www-form-urlencoded", Cookie: "me-guild-member.link-intent=opaque; me-guild-office.session-token=private" } });
+  const response = await proxyAdventureRequest(input, ["member-auth", "signin", "google"], { env, fetch: f.fetcher });
+  privateResponse(response, 200);
+  assert.equal(f.calls[0].url, `${backend}/api/adventure/member-auth/signin/google`);
+  assert.equal(new TextDecoder().decode(f.calls[0].options.body as ArrayBuffer), body);
+  assert.equal(new Headers(f.calls[0].options.headers).get("Cookie"), "me-guild-member.link-intent=opaque");
+  assert.deepEqual(response.headers.getSetCookie(), ["me-guild-member.link-intent=opaque; Path=/; HttpOnly; SameSite=Lax; Secure"]);
+});
+
 test("external, credential-bearing, Office and non-auth Discord redirects fail closed", async () => {
   for (const location of ["https://attacker.test/adventure", "//attacker.test/adventure", `${backend}/adventure`, `${frontend}/login`, `${frontend}/api/auth/signin`, `${frontend}/operations/raffles`, `${frontend}/adventure/../api/auth`, "javascript:alert(1)", "https://user:password@community.example.test/adventure", "https://discord.com/other", "https://discord.com.evil.test/oauth2/authorize"]) {
     const f = fixture(() => new Response(null, { status: 302, headers: { Location: location } }));
@@ -216,7 +272,7 @@ test("backend auth/errors and HEAD/empty responses keep their real status with p
 });
 
 test("bad configuration and network/abort failures produce private 503 without leaking internals", async () => {
-  for (const badEnv of [{ NODE_ENV: "production" }, { ...env, ME_GUILD_BACKEND_URL: "https://user:fixture-password@backend.example.test" }, { ...env, ME_GUILD_FRONTEND_URL: "http://community.example.test" }]) {
+  for (const badEnv of [{ NODE_ENV: "production" }, { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: frontend }, { ...env, ME_GUILD_OFFICE_URL: "https://user:fixture-password@office.example.test" }, { ...env, ME_GUILD_OFFICE_URL: "http://api.internal:3002" }, { ...env, ME_GUILD_FRONTEND_URL: "http://community.example.test" }]) {
     const f = fixture();
     const response = await proxyAdventureRequest(request(), ["raffles"], { env: badEnv, fetch: f.fetcher });
     privateResponse(response, 503); assert.equal(f.calls.length, 0); assert.equal((await response.json()).code, "GUILD_BACKEND_UNAVAILABLE");

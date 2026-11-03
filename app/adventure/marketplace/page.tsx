@@ -9,6 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default async function MarketplacePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { guildId, auctionId, view, composeAuction } = marketplaceDestination(await searchParams);
-  return <Marketplace key={`${guildId}:${auctionId}:${view}:${composeAuction}`} initialGuildId={guildId} initialAuctionId={auctionId} initialView={view} initialComposeAuction={composeAuction} />;
+  const { guildId, auctionId, tradeId, view, composeAuction } = marketplaceDestination(await searchParams);
+  return <Marketplace key={`${guildId}:${auctionId}:${tradeId}:${view}:${composeAuction}`} initialGuildId={guildId} initialAuctionId={auctionId} initialTradeId={tradeId} initialView={view} initialComposeAuction={composeAuction} />;
 }

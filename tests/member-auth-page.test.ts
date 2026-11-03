@@ -30,8 +30,10 @@ test("auth UI never turns an untrusted return destination into an external or Of
 });
 
 test("OAuth errors are mapped to safe messages without reflecting provider input", () => {
-  assert.match(memberAuthPageInput({ error: "MemberLinkRequired" }).error!, /ผู้ดูแล/);
+  assert.match(memberAuthPageInput({ error: "MemberLinkRequired" }).error!, /บัญชีเดิมก่อน/);
   assert.match(memberAuthPageInput({ error: "MemberUnavailable" }).error!, /ไม่พร้อม/);
+  assert.match(memberAuthPageInput({ error: "MemberLinkConflict" }).error!, /สมาชิกอีกคน/);
+  assert.match(memberAuthPageInput({ error: "MemberLinkExpired" }).error!, /เริ่มเชื่อมบัญชีอีกครั้ง/);
   const attackerText = "<script>alert('private token')</script>";
   assert.ok(memberAuthPageInput({ error: attackerText }).error);
   assert.ok(!memberAuthPageInput({ error: attackerText }).error!.includes(attackerText));

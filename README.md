@@ -24,7 +24,7 @@ cd D:\web\me-guild\me-guild-b
 npm.cmd run dev
 ```
 
-`.env.local` ที่เตรียมไว้ในเครื่องมีเฉพาะ URL สามตัว ไม่มีการคัดลอกกุญแจหรือข้อมูลลับจาก B
+ตั้ง URL ฝั่ง server ใน `.env.local` สองตัว: `ME_GUILD_FRONTEND_URL` สำหรับ F และ `ME_GUILD_OFFICE_URL` สำหรับทั้ง API ของ B และลิงก์ Office โดยไม่คัดลอกกุญแจหรือข้อมูลลับจาก B
 
 ## หน้าบ้านและบัญชีสมาชิก — 1 พฤศจิกายน 2026
 
@@ -95,7 +95,7 @@ npm.cmd start
 
 Next.js สร้าง standalone output ใน `.next/standalone`; postbuild แนบ `public/` และ `.next/static/` ให้อัตโนมัติ และ `npm.cmd start` เรียก standalone server ตามรูปแบบที่ Next.js รองรับ พอร์ตเริ่มต้น3000 เปลี่ยนด้วย environment `PORT` ได้
 
-Production ตั้ง URL ทั้งสามอย่างชัดเจนผ่าน environment ของ F: `ME_GUILD_BACKEND_URL` (B ภายในหรือ public), `ME_GUILD_FRONTEND_URL` (HTTPS ของเว็บชุมชน), `ME_GUILD_OFFICE_URL` (HTTPS ของ Office) และตั้ง `ME_GUILD_FRONTEND_URL` บน B ให้ตรงกัน พร้อมเพิ่ม HTTPS member callback ใน Discord Developer Portal ก่อนใช้งานจริง
+Production ตั้ง URL สองตัวอย่างชัดเจนผ่าน environment ของ F: `ME_GUILD_FRONTEND_URL` (HTTPS ของเว็บชุมชน) และ `ME_GUILD_OFFICE_URL` (HTTPS ของ Office ที่ server ของ F และ browser ติดต่อได้) ทั้งคำขอ API ไป B และลิงก์ Office ใช้ `ME_GUILD_OFFICE_URL` ค่าเดียวกัน ตั้ง `ME_GUILD_FRONTEND_URL` บน B ให้ตรงกัน พร้อมเพิ่ม HTTPS member callback ใน Discord Developer Portal ก่อนใช้งานจริง
 
 ไม่มี DB migration หรือการสร้างผลรางวัลใหม่จากการแยกโปรเจกต์นี้
 
@@ -108,7 +108,7 @@ docker build --tag me-guild-f:local .
 docker run --rm --publish 3000:3000 --env-file .env.production me-guild-f:local
 ```
 
-เตรียม `.env.production` สำหรับ runtime ด้วย URL ของ F/B/Office ตามหัวข้อด้านบน; `.dockerignore` กัน `.env*` และ dependency/build ในเครื่องออกจาก image โดยไม่ต้องใช้ Prisma, database URL หรือ migration stage ใน F
+เตรียม `.env.production` สำหรับ runtime ด้วย URL ของ F และ Office ตามหัวข้อด้านบน; `.dockerignore` กัน `.env*` และ dependency/build ในเครื่องออกจาก image โดยไม่ต้องใช้ Prisma, database URL หรือ migration stage ใน F
 
 Container รัน standalone server ด้วยผู้ใช้ `node` ที่ `0.0.0.0:3000`; เปลี่ยนพอร์ตด้วย `PORT` ได้ ตั้ง health check path เป็น `/api/health/ready` ซึ่งตรวจว่า frontend รับคำขอได้และส่ง `APP_REVISION` กลับเมื่อกำหนดไว้ โดยไม่ตรวจฐานข้อมูลหรือความพร้อมของ B
 

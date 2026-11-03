@@ -10,7 +10,11 @@ export function memberAuthPageInput(query: MemberAuthSearchParams, fallback = PU
   const allowed = new URL(adventureMemberRedirect(requested, "https://member.invalid"));
   const code = typeof query.error === "string" ? query.error : "";
   const error = code === "MemberLinkRequired"
-    ? "อีเมลนี้มีบัญชีสมาชิกอยู่แล้ว กรุณาติดต่อผู้ดูแลเพื่อยืนยันการเชื่อม Discord"
+    ? "อีเมลนี้มีบัญชีสมาชิกอยู่แล้ว ให้เข้าสู่ระบบด้วยบัญชีเดิมก่อน แล้วเลือกเชื่อมบัญชี Google หรือ Discord"
+    : code === "MemberLinkConflict"
+      ? "บัญชีนี้เชื่อมกับสมาชิกอีกคนแล้ว กรุณาเลือกบัญชีที่ต้องการเชื่อมให้ถูกต้อง"
+      : code === "MemberLinkExpired"
+        ? "คำขอเชื่อมบัญชีหมดอายุหรือบัญชีที่เข้าสู่ระบบเปลี่ยนไป กรุณาเริ่มเชื่อมบัญชีอีกครั้ง"
     : code === "MemberUnavailable"
       ? "ประตูสมาชิกยังไม่พร้อมใช้งาน กรุณาลองใหม่ภายหลัง"
       : code ? "เข้าสู่ระบบไม่สำเร็จหรือยกเลิกไปแล้ว กดปุ่มเพื่อลองอีกครั้ง" : null;

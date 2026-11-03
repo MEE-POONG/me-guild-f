@@ -5,7 +5,7 @@ import { memberAuthPageInput, type MemberAuthSearchParams } from "@/lib/member-a
 
 export const metadata: Metadata = {
   title: "สมัครสมาชิก | Me Guild",
-  description: "เริ่มการผจญภัยกับ Me Guild ใช้ Discord เพื่อสร้างบัญชีสมาชิกเมื่อยืนยันตัวตนสำเร็จครั้งแรก",
+  description: "เริ่มการผจญภัยกับ Me Guild สมัครสมาชิกด้วย Discord หรือ Google",
   robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";
@@ -13,5 +13,5 @@ export const dynamic = "force-dynamic";
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<MemberAuthSearchParams> }) {
   const [query, status] = await Promise.all([searchParams, getMemberLoginStatus()]);
   const input = memberAuthPageInput(query);
-  return <AdventureMemberLogin mode="register" configured={status.configured} returnTo={input.returnTo} initialError={input.error ?? status.error} currentDisplayName={status.currentDisplayName} />;
+  return <AdventureMemberLogin mode="register" {...status} returnTo={input.returnTo} initialError={input.error ?? status.error} />;
 }

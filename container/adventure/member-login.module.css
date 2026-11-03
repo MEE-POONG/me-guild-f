@@ -32,6 +32,11 @@
 .login svg { width: 25px; height: 25px; flex: none; }
 .login:hover:enabled { background: #315747; transform: translateY(-1px); }
 .login:disabled { cursor: default; background: #78877e; border-color: #78877e; }
+.google { margin-top: 12px; background: #fff; border-color: #b7b8b1; color: #303631; }
+.google svg { width: 20px; height: 20px; }
+.google:hover:enabled { background: #efefeb; }
+.google:disabled { background: #eeede7; border-color: #d4d4ca; color: #6b7165; }
+.connectNotice { color: #244438; }
 .notice { margin: 13px 0 0; color: #647168; font-size: 12px; line-height: 1.9; text-align: center; }
 .pending { min-height: 22px; margin: 4px 0; text-align: center; color: #716f60; font-size: 12px; }
 .divider { margin: 0 0 24px; }

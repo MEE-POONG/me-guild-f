@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { allowedAdventureMethod, proxyAdventureRequest } from "../lib/backend-proxy";
 import { adventureMemberRedirect } from "../lib/adventure-member-policy";
-import { businessAuthorizationUrl, auctionBidCost, marketplaceDestination, marketplaceLoginUrl, offersEqual, parseTradeCopper, pendingTrade, tradeCopper, tradeOfferSummary, tradeConfirmationCurrent, type MarketAuction, type MarketTrade } from "../lib/marketplace-types";
+import { businessAuthorizationUrl, auctionBidCost, marketplaceDestination, marketplaceLoginUrl, offersEqual, parseTradeCopper, pendingTrade, tradeCopper, tradeTicketQuantity, tradeOfferSummary, tradeConfirmationCurrent, type MarketAuction, type MarketTrade } from "../lib/marketplace-types";
 
 test("marketplace proxy allows only board reads and POST with the existing member origin/cookie boundary", async () => {
   assert.equal(allowedAdventureMethod(["marketplace"], "GET"), true);
@@ -10,9 +10,10 @@ test("marketplace proxy allows only board reads and POST with the existing membe
   for (const method of ["DELETE", "PATCH", "PUT"]) assert.equal(allowedAdventureMethod(["marketplace"], method), false);
   for (const path of [["marketplace", "internal"], ["internal", "marketplace"], ["marketplace", "../admin"]]) assert.equal(allowedAdventureMethod(path, "POST"), false);
   let calls = 0;
-  const env = { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: "https://guild.test", ME_GUILD_BACKEND_URL: "https://office.test" };
-  const fakeFetch: typeof fetch = async (_url, init) => {
+  const env = { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: "https://guild.test", ME_GUILD_OFFICE_URL: "https://office.test" };
+  const fakeFetch: typeof fetch = async (url, init) => {
     calls++; const headers = new Headers(init?.headers);
+    assert.equal(String(url), `${env.ME_GUILD_OFFICE_URL}/api/adventure/marketplace`);
     assert.equal(headers.get("cookie"), "me-guild-member.session-token=member");
     assert.equal(headers.get("authorization"), null);
     assert.equal(headers.get("x-market-signature"), null);
@@ -49,7 +50,7 @@ test("Discord login retains auction and guild deep links but never allows a fore
 
 test("community auction button survives login with its guild and an open compose form", () => {
   const destination = marketplaceDestination({ guildId: "123456789012345678", view: "auctions", compose: "auction" });
-  assert.deepEqual(destination, { guildId: "123456789012345678", auctionId: "", view: "auctions", composeAuction: true });
+  assert.deepEqual(destination, { guildId: "123456789012345678", auctionId: "", tradeId: "", view: "auctions", composeAuction: true });
   const login = new URL(marketplaceLoginUrl(destination.guildId, destination.auctionId, destination), "https://guild.test");
   const returnTo = login.searchParams.get("returnTo");
   assert.ok(returnTo);
@@ -66,7 +67,7 @@ test("community trade link selects trades, while malformed or repeated link para
   for (const query of [
     { guildId: "../admin", auction: "javascript:alert(1)", view: "https://evil.test", compose: "auction.create" },
     { guildId: ["123456789012345678", "987654321098765432"], auction: ["a".repeat(24)], view: ["trades", "auctions"], compose: ["auction"] },
-  ]) assert.deepEqual(marketplaceDestination(query), { guildId: "", auctionId: "", view: "inventory", composeAuction: false });
+  ]) assert.deepEqual(marketplaceDestination(query), { guildId: "", auctionId: "", tradeId: "", view: "inventory", composeAuction: false });
 });
 
 test("unsaved offer changes are detected regardless of UI order; zero rows do not prevent locking", () => {
@@ -84,8 +85,8 @@ test("bid confirmation reserves full price for a challenger and only the increas
 });
 
 test("trade Copper is a bounded whole amount; empty or exponential inputs cannot silently become zero", () => {
-  for (const [input, amount] of [["0", 0], ["42", 42], ["1000000", 1_000_000], [" 25 ", 25]] as const) assert.equal(parseTradeCopper(input), amount);
-  for (const input of ["", " ", "-1", "+1", "01", "1.5", "1e3", "1,000", "1000001", "Infinity", "NaN"]) assert.equal(parseTradeCopper(input), null);
+  for (const [input, amount] of [["0", 0], ["42", 42], ["1000", 1000], ["01000", 1000], ["1,000", 1000], ["1,000,000", 1_000_000], ["1000000", 1_000_000], [" 25 ", 25]] as const) assert.equal(parseTradeCopper(input), amount);
+  for (const input of ["", " ", "-1", "+1", "1.5", "1e3", "1,00", "1,,000", "1000001", "Infinity", "NaN"]) assert.equal(parseTradeCopper(input), null);
 });
 
 test("trade review exposes both Copper amounts and every item, including item-only legacy offers", () => {
@@ -106,4 +107,28 @@ test("a reviewed trade becomes unconfirmable when refresh advances its revision 
   assert.equal(tradeConfirmationCurrent(action, []), false);
   for (const status of ["LOCKING", "SETTLING", "CANCELLING"]) assert.equal(pendingTrade({ status }), true);
   for (const status of ["OPEN", "COMPLETED", "CANCELLED", "EXPIRED"]) assert.equal(pendingTrade({ status }), false);
+});
+
+test("a trade invitation retains its exact trade and guild through Discord sign in", () => {
+  const guildId = "123456789012345678", tradeId = "c".repeat(24);
+  const destination = marketplaceDestination({ guildId, trade: tradeId });
+  assert.equal(destination.tradeId, tradeId);
+  assert.equal(destination.view, "trades");
+  const login = new URL(marketplaceLoginUrl(guildId, "", destination), "https://guild.test");
+  const returned = new URL(adventureMemberRedirect(login.searchParams.get("returnTo")!, "https://guild.test"));
+  assert.deepEqual(marketplaceDestination(Object.fromEntries(returned.searchParams)), destination);
+  assert.equal(marketplaceDestination({ trade: [tradeId] }).tradeId, "");
+  assert.equal(marketplaceDestination({ trade: "../admin" }).tradeId, "");
+});
+
+test("both participants' same-guild tickets are visible in the final trade review", () => {
+  const guildId = "123456789012345678";
+  const trade = { guildId, participantIds: ["me", "peer"], offers: { me: [], peer: [] }, ticketOffers: { me: [{ guildId, quantity: 1 }], peer: [{ guildId, quantity: 2 }, { guildId: "other", quantity: 999 }] } } as unknown as MarketTrade;
+  assert.equal(tradeTicketQuantity(trade, "me"), 1);
+  assert.equal(tradeTicketQuantity(trade, "peer"), 2);
+  assert.equal(tradeTicketQuantity({ ...trade, ticketOffers: undefined }, "me"), 0);
+  const summary = tradeOfferSummary(trade, "me");
+  assert.match(summary, /ตั๋ว × 1/);
+  assert.match(summary, /ตั๋ว × 2/);
+  assert.doesNotMatch(summary, /999/);
 });

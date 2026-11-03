@@ -5,27 +5,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { FaDiscord } from "react-icons/fa";
+import { FcGoogle } from "react-icons/fc";
 import { Arrow, GuildBrand } from "@/container/public/guild-brand";
 import { GuildTilt, Motion } from "@/container/public/motion";
-import { endAdventureMemberSession, startAdventureDiscordLogin } from "@/lib/adventure-member-login";
+import { endAdventureMemberSession, startAdventureMemberLogin } from "@/lib/adventure-member-login";
 import { memberAuthSwitchHref, type MemberAuthMode } from "@/lib/member-auth-page";
+import type { MemberAuthProvider, MemberLoginStatus } from "@/lib/member-login-status";
 import styles from "./member-login.module.css";
 
-type MemberLoginProps = {
+type MemberLoginProps = Pick<MemberLoginStatus, "configured" | "providers" | "currentProvider" | "linkedProviders" | "discordReady" | "currentDisplayName"> & {
   mode?: MemberAuthMode;
-  configured: boolean;
   returnTo: string;
   initialError: string | null;
-  currentDisplayName?: string | null;
 };
 
-export function AdventureMemberLogin({ mode = "login", configured, returnTo, initialError, currentDisplayName = null }: MemberLoginProps) {
+export function AdventureMemberLogin({ mode = "login", configured, providers, linkedProviders, discordReady, returnTo, initialError, currentDisplayName }: MemberLoginProps) {
   const register = mode === "register";
   const marketplace = returnTo.split(/[?#]/)[0] === "/adventure/marketplace";
   const raffle = returnTo.split(/[?#]/)[0] === "/adventure/raffles";
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
-  const [pending, setPending] = useState<"signin" | "signout" | null>(null);
+  const signedIn = currentDisplayName !== null;
+  const needsDiscord = signedIn && !discordReady;
+  const [pending, setPending] = useState<MemberAuthProvider | "signout" | null>(null);
   const [actionResult, setActionResult] = useState<{ error: string | null } | null>(null);
   const error = actionResult === null ? initialError : actionResult.error;
   const inFlight = useRef<AbortController | null>(null);
@@ -35,8 +37,8 @@ export function AdventureMemberLogin({ mode = "login", configured, returnTo, ini
     return () => { mounted.current = false; inFlight.current?.abort(); };
   }, []);
 
-  async function authenticate(action: "signin" | "signout") {
-    if (!configured || inFlight.current || pending !== null) return;
+  async function authenticate(action: MemberAuthProvider | "signout") {
+    if (!configured || action !== "signout" && !providers[action] || inFlight.current || pending !== null) return;
     const controller = new AbortController();
     inFlight.current = controller;
     const timer = setTimeout(() => controller.abort("timeout"), 15_000);
@@ -44,13 +46,14 @@ export function AdventureMemberLogin({ mode = "login", configured, returnTo, ini
     setActionResult({ error: null });
     try {
       const dependencies = { origin: window.location.origin, fetch, signal: controller.signal };
+      const destination = action === "google" ? `/adventure/login?${new URLSearchParams({ returnTo })}` : returnTo;
       const target = action === "signout"
         ? await endAdventureMemberSession(dependencies)
-        : await startAdventureDiscordLogin(returnTo, dependencies);
+        : await startAdventureMemberLogin(action, destination, dependencies, { link: signedIn });
       if (!controller.signal.aborted) window.location.assign(target);
     } catch {
       if (mounted.current && (!controller.signal.aborted || controller.signal.reason === "timeout")) {
-        setActionResult({ error: action === "signout" ? "ยังออกจากระบบสมาชิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" : "ยังเปิดประตู Discord ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" });
+        setActionResult({ error: action === "signout" ? "ยังออกจากระบบสมาชิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" : `ยังเปิด ${action === "google" ? "Google" : "Discord"} ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง` });
         setPending(null);
       }
     } finally {
@@ -97,19 +100,24 @@ export function AdventureMemberLogin({ mode = "login", configured, returnTo, ini
 
         {currentDisplayName !== null ? <div className={styles.account}>
           <p>คุณเข้าสู่ระบบอยู่แล้วในชื่อ <strong>{currentDisplayName}</strong></p>
-          <Link href={returnTo} className={styles.continue}>ไปต่อด้วยบัญชีนี้ <Arrow /></Link>
+          {needsDiscord ? <p className={styles.connectNotice}>{linkedProviders.discord ? "ยืนยันสิทธิ์ Discord อีกครั้งเพื่อเปิดกระเป๋าและใช้งานกิจกรรมของกิลด์" : "เชื่อมบัญชี Discord เพื่อเปิดกระเป๋า แลกเปลี่ยน และใช้งานกิจกรรมของกิลด์"}</p> : <Link href={returnTo} className={styles.continue}>ไปต่อด้วยบัญชีนี้ <Arrow /></Link>}
           <button type="button" className={styles.signout} onClick={() => authenticate("signout")} disabled={!configured || pending !== null} aria-busy={pending === "signout"}>
             {pending === "signout" ? "กำลังออกจากระบบ…" : "ออกจากระบบสมาชิก"}
           </button>
         </div> : null}
 
-        <button type="button" className={styles.login} onClick={() => authenticate("signin")} disabled={!configured || pending !== null || refreshing} aria-busy={pending === "signin"}>
+        <button type="button" className={styles.login} onClick={() => authenticate("discord")} disabled={!providers.discord || pending !== null || refreshing} aria-busy={pending === "discord"}>
           <FaDiscord aria-hidden="true" />
-          {pending === "signin" ? "กำลังเปิด Discord…" : currentDisplayName !== null ? "ยืนยันสิทธิ์ Discord อีกครั้ง" : register ? "สมัครสมาชิกด้วย Discord" : "เข้าสู่ระบบด้วย Discord"}
+          {pending === "discord" ? "กำลังเปิด Discord…" : signedIn ? linkedProviders.discord ? "ยืนยันสิทธิ์ Discord อีกครั้ง" : "เชื่อมบัญชี Discord" : register ? "สมัครสมาชิกด้วย Discord" : "เข้าสู่ระบบด้วย Discord"}
         </button>
+        <button type="button" className={`${styles.login} ${styles.google}`} onClick={() => authenticate("google")} disabled={!providers.google || signedIn && linkedProviders.google || pending !== null || refreshing} aria-busy={pending === "google"}>
+          <FcGoogle aria-hidden="true" />
+          {pending === "google" ? "กำลังเปิด Google…" : signedIn ? linkedProviders.google ? "เชื่อม Google แล้ว" : "เชื่อมบัญชี Google" : register ? "สมัครสมาชิกด้วย Google" : "เข้าสู่ระบบด้วย Google"}
+        </button>
+        {!providers.google && configured ? <p className={styles.notice}>Google ยังไม่พร้อมใช้งานในขณะนี้</p> : null}
         <p className={styles.notice}>{register
-          ? "ใช้ Discord ที่ยืนยันอีเมลแล้ว ระบบจะสร้างบัญชีสมาชิกเมื่อยืนยันตัวตนสำเร็จครั้งแรก หากมีบัญชีแล้วจะเข้าสู่บัญชีเดิม"
-          : "ใช้ Discord บัญชีเดียวกับที่คุณใช้ในชุมชน"}</p>
+          ? "เลือก Discord หรือ Google ที่ยืนยันอีเมลแล้ว ระบบจะสร้างบัญชีสมาชิกเมื่อยืนยันตัวตนครั้งแรก"
+          : signedIn ? "เชื่อมบัญชีเพื่อเข้าสู่สมาชิกคนเดิมได้ทั้งสองช่องทาง" : "เลือก Discord หรือ Google เพื่อเข้าสู่ระบบ"}</p>
 
         {!configured ? <div className={styles.unavailable}>
           <p role={error ? "alert" : "status"}>{error ?? "ขณะนี้ยังเชื่อมต่อระบบสมาชิกไม่ได้ โปรดลองอีกครั้งในภายหลัง"}</p>
@@ -117,7 +125,7 @@ export function AdventureMemberLogin({ mode = "login", configured, returnTo, ini
         </div> : null}
         {configured && error ? <p className={styles.message} role="alert">{error}</p> : null}
         <p className={styles.pending} role="status" aria-live="polite">
-          {pending === "signin" ? "กำลังพาไปยืนยันตัวตนที่ Discord" : pending === "signout" ? "กำลังออกจากระบบสมาชิก" : ""}
+          {pending === "discord" ? "กำลังพาไปยืนยันตัวตนที่ Discord" : pending === "google" ? "กำลังพาไปยืนยันตัวตนที่ Google" : pending === "signout" ? "กำลังออกจากระบบสมาชิก" : ""}
         </p>
 
         <div className={styles.divider} aria-hidden="true"><span>✦</span></div>
@@ -127,10 +135,10 @@ export function AdventureMemberLogin({ mode = "login", configured, returnTo, ini
         </p>
 
         <ul className={styles.benefits}>
-          <li><span aria-hidden="true">✓</span> บัญชีเดียวกับที่ใช้ในชุมชน</li>
-          <li><span aria-hidden="true">✓</span> ยืนยันตัวตนผ่าน Discord</li>
+          <li><span aria-hidden="true">✓</span> เลือกเข้าสู่ระบบด้วย Discord หรือ Google</li>
+          <li><span aria-hidden="true">✓</span> เชื่อม Discord เพื่อใช้กระเป๋าในชุมชน</li>
         </ul>
-        <p className={styles.permissions}>ระบบขออ่านชื่อ อีเมล รายชื่อเซิร์ฟเวอร์ และสถานะสมาชิกกับยศในเซิร์ฟเวอร์ เพื่อยืนยันตัวตนและสิทธิ์เข้าร่วมกิจกรรม</p>
+        <p className={styles.permissions}>Google ใช้ชื่อ อีเมล และรูปโปรไฟล์เพื่อยืนยันตัวตน ส่วน Discord ใช้ข้อมูลบัญชี รายชื่อเซิร์ฟเวอร์ และยศเพื่อยืนยันสิทธิ์ในกิลด์</p>
         {marketplace || raffle ? <p className={styles.footnote}>{marketplace ? "การเข้าสู่ระบบยังไม่แลกของหรือใช้ copper ทุกธุรกรรมต้องยืนยันอีกครั้ง" : "การเข้าสู่ระบบยังไม่ใช้ตั๋ว คุณเลือกส่งตั๋วเข้ากิจกรรมได้ภายหลัง"}</p> : null}
         <Link href="/adventure" className={styles.explore}>เริ่มต้นจากการสำรวจกิลด์ก็ได้ <Arrow /></Link>
       </section>

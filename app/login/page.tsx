@@ -5,7 +5,7 @@ import { memberAuthPageInput, type MemberAuthSearchParams } from "@/lib/member-a
 
 export const metadata: Metadata = {
   title: "เข้าสู่ระบบ | Me Guild",
-  description: "กลับมาพบเพื่อนและไปต่อกับการผจญภัยของคุณ เข้าสู่ Me Guild ด้วยบัญชี Discord",
+  description: "กลับมาพบเพื่อนและไปต่อกับการผจญภัยของคุณ เข้าสู่ Me Guild ด้วย Discord หรือ Google",
   robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";
@@ -13,5 +13,5 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<MemberAuthSearchParams> }) {
   const [query, status] = await Promise.all([searchParams, getMemberLoginStatus()]);
   const input = memberAuthPageInput(query);
-  return <AdventureMemberLogin mode="login" configured={status.configured} returnTo={input.returnTo} initialError={input.error ?? status.error} currentDisplayName={status.currentDisplayName} />;
+  return <AdventureMemberLogin mode="login" {...status} returnTo={input.returnTo} initialError={input.error ?? status.error} />;
 }

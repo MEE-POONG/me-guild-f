@@ -1,4 +1,5 @@
 import { getBackendOrigin, getFrontendOrigin, isMemberSetCookie, memberCookieHeader, type BackendEnvironment } from "./backend-config";
+import { adventureMemberProviderRedirect } from "./adventure-member-policy";
 
 export function allowedAdventureMethod(path: readonly string[], method: string): boolean {
   const read = method === "GET" || method === "HEAD";
@@ -11,7 +12,7 @@ export function allowedAdventureMethod(path: readonly string[], method: string):
   if (path[0] !== "member-auth") return false;
   if (path.length === 2 && ["status", "csrf", "session", "error"].includes(path[1])) return read;
   if (path.length === 2 && path[1] === "signout") return method === "POST";
-  if (path.length === 3 && path[2] === "discord") return path[1] === "signin" && method === "POST" || path[1] === "callback" && read;
+  if (path.length === 3 && ["discord", "google"].includes(path[2])) return path[1] === "signin" && method === "POST" || path[1] === "callback" && read;
   return false;
 }
 
@@ -59,8 +60,9 @@ export async function proxyAdventureRequest(request: Request, path: readonly str
     if (location) {
       const target = new URL(location, frontend);
       const local = target.origin === frontend && (target.pathname === "/adventure" || target.pathname.startsWith("/adventure/"));
-      const discord = path[0] === "member-auth" && target.origin === "https://discord.com" && ["/api/oauth2/authorize", "/oauth2/authorize"].includes(target.pathname);
-      if (target.username || target.password || (!local && !discord)) { await response.body?.cancel(); return unavailable(502, "GUILD_REDIRECT_REJECTED"); }
+      const provider = path[0] === "member-auth" && (path[2] === "discord" || path[2] === "google")
+        && adventureMemberProviderRedirect(target, path[2], frontend);
+      if (target.username || target.password || (!local && !provider)) { await response.body?.cancel(); return unavailable(502, "GUILD_REDIRECT_REJECTED"); }
       output.set("Location", target.toString());
     }
     for (const cookie of response.headers.getSetCookie()) { if (isMemberSetCookie(cookie)) output.append("Set-Cookie", cookie); }

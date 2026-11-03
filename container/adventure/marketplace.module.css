@@ -3,8 +3,8 @@
 .page button { cursor: pointer; }
 .page button:disabled,.page fieldset:disabled { cursor: not-allowed; opacity: .55; }
 .page a { color: inherit; }
-.skipLink { position: fixed; left: 12px; top: -80px; z-index: 100; padding: 12px; background: #fff; }
-.skipLink:focus { top: 12px; }
+.skipLink { position: fixed; left: 12px; top: 12px; z-index: 100; padding: 12px; background: #fff; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; white-space: nowrap; }
+.skipLink:focus { clip-path: none; width: auto; height: auto; overflow: visible; }
 .masthead { min-height: 94px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px max(24px, calc((100vw - 1180px) / 2)); border-bottom: 1px solid #d9cfb7; background: #fcfaf2; }
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .brand>svg { font-size: 44px; color: #96753c; }
@@ -205,3 +205,51 @@
 .authorizationDetails dt { font-weight: 700; }
 .authorizationDetails dd { margin: 0 0 8px; overflow-wrap: anywhere; }
 .pendingNotice > :is(a, button) { margin: 6px 8px 0 0; }
+
+.page :is(button,a,input,select):focus-visible { outline: 3px solid #31503d; outline-offset: 3px; }
+.page ::selection { background: #d7e7cf; color: #203a2c; }
+.page input { caret-color: #31503d; }
+.assetPicker { width: 100%; }
+.assetTools { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin: 16px 0; }
+.assetTools label { display: grid; gap: 6px; font-size: 13px; width: min(100%, 340px); }
+.assetTools > span { white-space: nowrap; color: #62543b; font-size: 13px; padding-bottom: 12px; }
+.assetGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.assetButton { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; min-height: 132px; padding: 14px 10px; border: 1px solid #c5b897; border-radius: 8px; background: #fffdf6; color: #294437; text-align: center; overflow-wrap: anywhere; }
+.assetButton:hover:enabled { background: #f0f3e7; border-color: #65805c; }
+.assetButton.assetSelected { background: #eaf1e3; border-color: #46683f; }
+.assetButton:disabled { opacity: .75; }
+.assetButton strong { font-size: 14px; line-height: 1.6; }
+.assetButton strong span { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.assetButton small { color: #5d654d; font-size: 11px; line-height: 1.5; }
+.assetArt { display: grid; place-items: center; width: 56px; height: 56px; color: #8a6e36; }
+.assetArt img { width: 56px; height: 56px; object-fit: contain; }
+.assetArt svg { width: 42px; height: 42px; }
+.assetPagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 16px 0; }
+.assetPagination > span { font-size: 13px; font-variant-numeric: tabular-nums; }
+.assetDetail { padding-block: 12px; border-block: 1px solid #d7c8a8; font-size: 13px; line-height: 1.8; }
+.selectedItems { margin: 24px 0 16px; }
+.selectedItems h4 { font-size: 15px; margin: 0 0 10px; }
+.quantityControls { display: flex; align-items: center; gap: 8px; }
+.quantityRow label { overflow-wrap: anywhere; }
+.quantityRow input[aria-invalid="true"] { border-color: #943b2d; }
+.removeAsset { border: 0; background: transparent; color: #793d2d; padding: 12px 8px; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
+.tradeProgress { display: flex; flex-wrap: wrap; gap: 18px; border-block: 1px solid #e0d6c0; padding: 12px 0; margin: 16px 0; color: #655b45; font-size: 12px; }
+.stepDone { color: #2e5e32; font-weight: 700; }
+.offerCopper { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; }
+.offerCopper strong { font-variant-numeric: tabular-nums; }
+.tradeLink { display: flex; gap: 14px; flex-wrap: wrap; justify-content: space-between; border-top: 1px solid #e0d6c0; padding-top: 14px; margin-top: 18px; font-size: 12px; color: #5f634e; line-height: 1.8; }
+.tradeLink a { text-underline-offset: 4px; font-weight: 600; }
+.linkActions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.tradeLink > label { display: grid; gap: 6px; flex-basis: 100%; }
+.featuredTrade { border-color: #46683f; scroll-margin-top: 24px; }
+@media (max-width: 760px) { .assetGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .assetGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .assetTools { align-items: center; }
+  .assetTools > span { padding: 0; font-size: 12px; }
+  .assetButton { min-height: 128px; }
+  .quantityRow { flex-wrap: wrap; }
+  .quantityControls { margin-left: auto; }
+  .tradeProgress { gap: 10px; font-size: 11px; }
+  .offerCopper { font-size: 12px; }
+}
