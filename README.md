@@ -99,6 +99,19 @@ Production ตั้ง URL ทั้งสามอย่างชัดเจ�
 
 ไม่มี DB migration หรือการสร้างผลรางวัลใหม่จากการแยกโปรเจกต์นี้
 
+## Deploy ด้วย Docker
+
+ใช้ branch `main`, build context เป็น root ของ repo (`.`), Dockerfile path `Dockerfile` และ target `runtime` (หรือปล่อยว่างเพื่อใช้ stage สุดท้าย)
+
+```powershell
+docker build --tag me-guild-f:local .
+docker run --rm --publish 3000:3000 --env-file .env.production me-guild-f:local
+```
+
+เตรียม `.env.production` สำหรับ runtime ด้วย URL ของ F/B/Office ตามหัวข้อด้านบน; `.dockerignore` กัน `.env*` และ dependency/build ในเครื่องออกจาก image โดยไม่ต้องใช้ Prisma, database URL หรือ migration stage ใน F
+
+Container รัน standalone server ด้วยผู้ใช้ `node` ที่ `0.0.0.0:3000`; เปลี่ยนพอร์ตด้วย `PORT` ได้ ตั้ง health check path เป็น `/api/health/ready` ซึ่งตรวจว่า frontend รับคำขอได้และส่ง `APP_REVISION` กลับเมื่อกำหนดไว้ โดยไม่ตรวจฐานข้อมูลหรือความพร้อมของ B
+
 ## ทักษะชีวิตและ Lv — 28 ตุลาคม 2026
 
 เพิ่มคลังสาธารณะ `/adventure/skills/library` เปิดอ่านโดยไม่ล็อกอิน: 28 อาชีพ / 128 ทักษะรวมฐานเดิม / 1,152 บททดสอบปฏิบัติ G–SS พร้อมเลือกอาชีพและเปิดข้อสอบรายใบ ข้อมูลนี้เป็นเกณฑ์ตั้งต้นจาก B ไม่ใช่คะแนนหรือประวัติสมาชิก ผลสอบจริงแสดงใน `/adventure/skills` และบันทึกผ่าน Office พร้อมหลักฐานและ revision
