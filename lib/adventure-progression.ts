@@ -30,7 +30,7 @@ export type CommunityProgressionSnapshot = {
 };
 
 export const COMMUNITY_RANKS = [
-  { level: 1, title: "ผู้มาเยือน" },
+  { level: 1, title: "นักผจญภัยฝึกหัด" },
   { level: 5, title: "นักสำรวจ" },
   { level: 10, title: "นักผจญภัย" },
   { level: 20, title: "ผู้ร่วมสร้าง" },

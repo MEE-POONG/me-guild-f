@@ -41,7 +41,7 @@ export function SkillExamGuide({ nodes, initialSkillId = "", libraryMode = false
   const passedGrades = new Set(passed.map(receipt => receipt.grade));
 
   return <section className={styles.guide} aria-labelledby="skill-exam-guide-heading">
-    <div className={styles.heading}><div><p className={styles.eyebrow}>PRACTICAL EXAM JOURNAL</p><h2 id="skill-exam-guide-heading" tabIndex={-1}>ข้อสอบปฏิบัติรายระดับ</h2><p>เลือกทักษะเพื่อดูโจทย์ตั้งแต่ G ถึง SS เตรียมผลงานตามเกณฑ์ แล้วให้ทีมงานตรวจและบันทึกผลสอบ</p></div><span className={styles.seal} aria-hidden="true">G → SS</span></div>
+    <div className={styles.heading}><div><h2 id="skill-exam-guide-heading" tabIndex={-1}>ข้อสอบและเควสเลื่อนขั้น</h2><p>เลือกทักษะเพื่อดูเงื่อนไขแต่ละระดับ ทักษะที่กำหนดเควสต้องทำตามลำดับและส่งหลักฐานครบก่อนให้ทีมงานรับรองผล</p></div><span className={styles.seal} aria-hidden="true">G → SS</span></div>
     <div className={styles.filters}>
       <label>ค้นหาทักษะหรืออาชีพสำหรับดูข้อสอบ<input type="search" value={query} maxLength={120} placeholder="กีตาร์ นักพัฒนาซอฟต์แวร์ หรือชื่อทักษะ…" onChange={event => setQuery(event.target.value)} /></label>
       <label>ทักษะที่ต้องการดูข้อสอบ<select value={node?.id ?? ""} disabled={!matching.length} onChange={event => setSelectedId(event.target.value)}>{matching.length ? matching.map(skill => <option key={skill.node.id} value={skill.node.id}>{skill.path}</option>) : <option value="">ไม่พบทักษะที่ตรงกับคำค้น</option>}</select></label>
@@ -58,16 +58,29 @@ export function SkillExamGuide({ nodes, initialSkillId = "", libraryMode = false
       {exams.length ? <div className={styles.exams}>{exams.map(exam => {
         const receipt = passed.find(value => value.grade === exam.grade);
         const isNext = !libraryMode && node.nextExamGrade === exam.grade;
+        const advancement = node.advancement?.find(value => value.grade === exam.grade);
+        const quests = [...(advancement?.quests ?? [])].sort((a, b) => a.order - b.order);
+        const requiresQuests = advancement?.method === "EXAM_AND_QUEST_CHAIN";
         return <details key={`${node.id}:${node.examRevision ?? 1}:${exam.grade}`} className={styles.exam} open={isNext || libraryMode && exam.grade === "F"} data-passed={passedGrades.has(exam.grade)}>
-          <summary><span className={styles.grade}>{exam.grade}</span><span className={styles.examTitle}><strong>{exam.title}</strong><small>{REAL_LIFE_GRADE_DIFFICULTY[exam.grade]} · ผลงานอย่างน้อย {number(exam.requiredSamples)} รายการ · คุณภาพขั้นต่ำ {number(exam.minAccuracyPercent)}%</small></span><span className={styles.badge} data-passed={Boolean(receipt)}>{receipt ? "ผ่านแล้ว" : isNext ? "ด่านถัดไป" : "ดูโจทย์"}</span></summary>
+          <summary><span className={styles.grade}>{exam.grade}</span><span className={styles.examTitle}><strong>{exam.title}</strong><small>{REAL_LIFE_GRADE_DIFFICULTY[exam.grade]} · {requiresQuests ? "ต้องสอบ + เควสต่อเนื่อง" : "ต้องสอบปฏิบัติ"} · ผลงานอย่างน้อย {number(exam.requiredSamples)} รายการ</small></span><span className={styles.badge} data-passed={Boolean(receipt)}>{receipt ? "ผลสอบผ่าน" : isNext ? "ด่านถัดไป" : "ดูเงื่อนไข"}</span></summary>
           <div className={styles.examBody}>
+            <div className={styles.advancement}>
+              <h4>เงื่อนไขเลื่อนขั้นเป็น {exam.grade}</h4>
+              <p><strong>{requiresQuests ? `ผ่านข้อสอบปฏิบัติและเควสต่อเนื่อง ${number(quests.length)} ขั้น` : "ผ่านข้อสอบปฏิบัติ"}</strong>{advancement?.prerequisiteGrade ? ` · ต้องผ่านระดับ ${advancement.prerequisiteGrade} ก่อน` : advancement ? " · เริ่มฝึกจากระดับนี้ได้" : ""}</p>
+              <p>ทีมงานตรวจผลงานและบันทึกผลตามเกณฑ์ของระดับนี้</p>
+            </div>
             <p className={styles.objective}>{exam.objective}</p>
             <div className={styles.requirements}><span>จำนวนผลงาน <b>{number(exam.requiredSamples)} รายการขึ้นไป</b></span><span>คุณภาพจากรายการตรวจ <b>อย่างน้อย {number(exam.minAccuracyPercent)}%</b></span><span>ระยะเวลาต่อผลงาน <b>{exam.minDurationSeconds > 0 ? `อย่างน้อย ${number(exam.minDurationSeconds)} วินาที` : "ไม่กำหนดตายตัว"}</b></span></div>
             <h4>เกณฑ์ผ่านข้อสอบ {exam.grade}</h4>
             <ul className={styles.criteria} aria-label={`เกณฑ์ผ่านข้อสอบ ${exam.grade}`}>{exam.criteria.map(criterion => <li key={criterion.id}><span aria-hidden="true">{receipt ? "✓" : "□"}</span><span>{criterion.text}</span></li>)}</ul>
             <div className={styles.examples}><h4>ตัวอย่างโจทย์และผลงาน</h4><ol>{exam.sampleLabels.map((label, index) => <li key={`${index}:${label}`}>{label}</li>)}</ol></div>
+            {requiresQuests && quests.length ? <section className={styles.questChain} aria-label={`เควสต่อเนื่องระดับ ${exam.grade}`}>
+              <h4>เควสต่อเนื่องที่ต้องผ่านตามลำดับ</h4>
+              <ol>{quests.map(quest => <li key={quest.id}><strong>{quest.title}</strong><p>{quest.objective}</p><p className={styles.questEvidence}><span>หลักฐาน:</span> {quest.evidence}</p></li>)}</ol>
+              <p className={styles.questNote}>รายการนี้เป็นเงื่อนไขของระดับ ไม่ใช่สถานะการทำเควสของคุณ ทีมงานต้องตรวจหลักฐานแต่ละขั้นก่อนรับรองการเลื่อนขั้น</p>
+            </section> : null}
             <div className={styles.evidence}><h4>หลักฐานที่ใช้ตรวจ</h4><p>{exam.evidence}</p></div>
-            {receipt ? <p className={styles.passed}>ทีมงานบันทึกผ่านระดับ {receipt.grade} แล้ว · <time dateTime={receipt.passedAt}>{examDate(receipt.passedAt)}</time></p> : null}
+            {receipt ? <p className={styles.passed}>ทีมงานบันทึกผลสอบผ่านระดับ {receipt.grade} · <time dateTime={receipt.passedAt}>{examDate(receipt.passedAt)}</time>{requiresQuests ? " · ตรวจหลักฐานเควสที่มีบันทึกในประวัติการประเมิน" : ""}</p> : null}
           </div>
         </details>;
       })}</div> : <div className={styles.empty}><p>ทักษะนี้ยังไม่มีรายละเอียดข้อสอบที่เปิดอ่านได้ ทีมงานจะเพิ่มเกณฑ์ผ่านหลังบ้าน</p></div>}
@@ -76,5 +89,9 @@ export function SkillExamGuide({ nodes, initialSkillId = "", libraryMode = false
 }
 
 export function SkillExamResultSummary({ result }: { result: RealLifeSkillExamResult }) {
-  return <div className={styles.historyResult} data-passed={result.passed}><p><strong>ข้อสอบ {result.grade} · {result.passed ? "ผ่าน" : "ยังไม่ผ่าน"}</strong><span>คุณภาพ {number(result.performancePercent)}% · ผ่าน {number(result.criteriaPassed.length)} รายการตรวจ</span></p>{result.samples.length ? <ul aria-label="ผลงานที่ใช้สอบ">{result.samples.map((sample, index) => <li key={`${index}:${sample.name}`}>{sample.name}{sample.durationSeconds > 0 ? ` · ${number(sample.durationSeconds)} วินาที` : ""}</li>)}</ul> : null}</div>;
+  return <div className={styles.historyResult} data-passed={result.passed}>
+    <p><strong>ข้อสอบ {result.grade} · {result.passed ? "ผ่าน" : "ยังไม่ผ่าน"}</strong><span>คุณภาพ {number(result.performancePercent)}% · ผ่าน {number(result.criteriaPassed.length)} รายการตรวจ</span></p>
+    {result.samples.length ? <ul aria-label="ผลงานที่ใช้สอบ">{result.samples.map((sample, index) => <li key={`${index}:${sample.name}`}>{sample.name}{sample.durationSeconds > 0 ? ` · ${number(sample.durationSeconds)} วินาที` : ""}</li>)}</ul> : null}
+    {result.questResults?.length ? <div className={styles.historyQuests}><h4>หลักฐานเควสที่ทีมงานบันทึก</h4><ol>{result.questResults.map((quest, index) => <li key={quest.questId}><strong>ขั้นที่ {number(index + 1)}</strong><p>{quest.evidence}</p><time dateTime={quest.completedAt}>{examDate(quest.completedAt)}</time></li>)}</ol></div> : null}
+  </div>;
 }

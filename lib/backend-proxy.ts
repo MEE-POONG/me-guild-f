@@ -3,7 +3,7 @@ import { adventureMemberProviderRedirect } from "./adventure-member-policy";
 
 export function allowedAdventureMethod(path: readonly string[], method: string): boolean {
   const read = method === "GET" || method === "HEAD";
-  if (path.length === 1 && path[0] === "marketplace") return read || method === "POST";
+  if (path.length === 1 && ["marketplace", "registration"].includes(path[0])) return read || method === "POST";
   if (path.length === 1 && ["rewards", "progression", "skills", "achievements", "guild-room", "raffles"].includes(path[0])) return read;
   if (path.length === 2 && path[0] === "skills" && path[1] === "library") return read;
   if (path.length === 2 && path[0] === "projects" && /^[a-z0-9][a-z0-9-]{1,79}$/.test(path[1])) return read;

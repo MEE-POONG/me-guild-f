@@ -40,9 +40,10 @@ export function AdventureHub({ initialCommunityView = "games", memberAuthError =
   const { state: skillState } = useRealLifeSkills();
   const realSkills = skillState.kind === "ready" ? skillState.snapshot : null;
   const playerProgress = progression.snapshot;
-  const levelLabel = realSkills ? `LV. ${realSkills.level}` : skillState.kind === "loading" ? "LV. …" : "LV. —";
-  const skillsLink = skillState.kind === "anonymous" ? "/adventure/login?returnTo=%2Fadventure%2Fskills" : "/adventure/skills";
-  const skillLabel = realSkills ? `คลาส ${realSkills.grade} · ${realSkills.percent.toLocaleString("th-TH")}%` : skillState.kind === "loading" ? "กำลังเปิดบันทึกทักษะ" : skillState.kind === "anonymous" ? "เข้าสู่ระบบเพื่อดู Lv" : "บันทึกยังไม่พร้อม · ลองใหม่";
+  const isVisitor = skillState.kind === "visitor";
+  const levelLabel = realSkills ? `LV. ${realSkills.level}` : isVisitor ? "ผู้มาเยือน" : skillState.kind === "loading" ? "LV. …" : "LV. —";
+  const skillsLink = skillState.kind === "anonymous" ? "/adventure/login?returnTo=%2Fadventure%2Fskills" : isVisitor ? "/adventure/register?returnTo=%2Fadventure%2Fskills" : "/adventure/skills";
+  const skillLabel = realSkills ? `คลาส ${realSkills.grade} · ${realSkills.percent.toLocaleString("th-TH")}%` : isVisitor ? "ลงทะเบียนนักผจญภัย · เริ่มเลเวล 1" : skillState.kind === "loading" ? "กำลังเปิดบันทึกทักษะ" : skillState.kind === "anonymous" ? "เข้าสู่ระบบเพื่อดู Lv" : "บันทึกยังไม่พร้อม · ลองใหม่";
   const xpLabel = playerProgress ? playerProgress.isMaxLevel ? "MAX LEVEL" : `${playerProgress.xpIntoLevel.toLocaleString("en-US")} / ${(playerProgress.xpForNextLevel ?? 0).toLocaleString("en-US")}` : "— / —";
   const [selectedNews, setSelectedNews] = useState<NewsPost | null>(null);
   const [category, setCategory] = useState<(typeof categories)[number]>("ทั้งหมด");
@@ -123,7 +124,8 @@ export function AdventureHub({ initialCommunityView = "games", memberAuthError =
           <Link href="/adventure/skills"><GiLaurels aria-hidden="true" /><span>Lv และทักษะชีวิตจริง</span></Link>
           <Link href="/adventure/headquarters"><GiCastle aria-hidden="true" /><span>โครงการศูนย์กลาง</span></Link>
           <Link href="/adventure/raffles"><GiTicket aria-hidden="true" /><span>ส่งตั๋วชิงโชค</span></Link>
-          <Link href="/adventure/login"><GiCompass aria-hidden="true" /><span>บัญชี Discord</span></Link>
+          <Link href="/adventure/register"><GiCompass aria-hidden="true" /><span>ทะเบียนนักผจญภัย</span></Link>
+          <Link href="/adventure/login"><GiCompass aria-hidden="true" /><span>บัญชีสมาชิก</span></Link>
         </nav>
         <div className={styles.sidebarBottom}>
           <GiCompass className={styles.fadedCompass} aria-hidden="true" />
@@ -135,10 +137,12 @@ export function AdventureHub({ initialCommunityView = "games", memberAuthError =
 
       <main id="adventure-main" className={styles.main}>
         <div className={styles.welcome} data-reveal>
-          <h1>ยินดีต้อนรับกลับ, นักผจญภัย.</h1>
+          <h1>{isVisitor ? "ยินดีต้อนรับ, ผู้มาเยือน" : realSkills ? "ยินดีต้อนรับกลับ, นักผจญภัย" : "ยินดีต้อนรับสู่ Me Guild"}</h1>
           <div className={styles.welcomeLine} aria-hidden="true"><span>✧</span></div>
           <span className={styles.date}>วันอังคารที่ 27 ตุลาคม พ.ศ. 2569</span>
         </div>
+
+        {isVisitor ? <section className={styles.registrationNotice} aria-label="ทะเบียนนักผจญภัย"><div><h2>พร้อมเริ่มการผจญภัยแล้วหรือยัง?</h2><p>บัญชีของคุณยังเป็นผู้มาเยือน ลงทะเบียนนักผจญภัยเพื่อเริ่มเลเวล 1 แล้วฝึกทักษะชีวิตจริงตามเส้นทางของคุณ</p></div><Link href="/adventure/register?returnTo=%2Fadventure%3Fprogression%3Dmember">ลงทะเบียนนักผจญภัย <Arrow small /></Link></section> : null}
 
         <section className={styles.hero} aria-labelledby="adventure-hero-title" data-reveal>
           <Image src="/adventure/kingdom.webp" alt="อาณาจักรแฟนตาซีกลางหุบเขาและต้นไม้ยักษ์ รอคอยเหล่านักผจญภัย" fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 85vw, 80vw" preload className={styles.heroImage} />

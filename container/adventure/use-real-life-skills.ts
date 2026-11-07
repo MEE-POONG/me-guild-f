@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { RealLifeSkillGrade, RealLifeSkillSnapshot } from "@/lib/real-life-skills-types";
 
-export type RealLifeSkillLoadState = { kind: "loading" } | { kind: "anonymous" } | { kind: "error"; message: string } | { kind: "ready"; snapshot: RealLifeSkillSnapshot };
+export type RealLifeSkillLoadState = { kind: "loading" } | { kind: "anonymous" } | { kind: "visitor" } | { kind: "error"; message: string } | { kind: "ready"; snapshot: RealLifeSkillSnapshot };
 const grades: RealLifeSkillGrade[] = ["SS", "S", "A", "B", "C", "D", "E", "F", "G"];
 function isSnapshot(value: unknown): value is RealLifeSkillSnapshot {
   if (!value || typeof value !== "object") return false;
@@ -25,6 +25,10 @@ export function useRealLifeSkills() {
       .then(async (response) => {
         if (response.status === 401) { if (!controller.signal.aborted) setState({ kind: "anonymous" }); return; }
         const result: unknown = await response.json();
+        if (response.status === 403 && result && typeof result === "object" && "code" in result && result.code === "ADVENTURER_REGISTRATION_REQUIRED") {
+          if (!controller.signal.aborted) setState({ kind: "visitor" });
+          return;
+        }
         if (!response.ok || !isSnapshot(result)) throw new Error("UNAVAILABLE");
         if (!controller.signal.aborted) setState({ kind: "ready", snapshot: result });
       })

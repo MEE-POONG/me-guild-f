@@ -5,7 +5,7 @@ import { memberAuthPageInput, type MemberAuthSearchParams } from "@/lib/member-a
 
 export const metadata: Metadata = {
   title: "สมัครสมาชิก | Me Guild",
-  description: "เริ่มการผจญภัยกับ Me Guild สมัครสมาชิกด้วย Discord หรือ Google",
+  description: "สมัคร Me Guild เป็นผู้มาเยือนด้วย Discord หรือ Google แล้วลงทะเบียนนักผจญภัยหลังเข้าสู่ระบบเพื่อเริ่มเลเวล 1",
   robots: { index: false, follow: false },
 };
 export const dynamic = "force-dynamic";

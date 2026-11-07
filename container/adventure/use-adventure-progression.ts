@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { buildCommunityProgressionSnapshot, COMMUNITY_PROGRESSION_RULE_VERSION, COMMUNITY_MAX_LEVEL, COMMUNITY_RANKS, progressionLevelThreshold, type CommunityProgressionCredit, type CommunityProgressionSnapshot } from "@/lib/adventure-progression";
 
 export type ProgressionMode = "demo" | "member";
-type ProgressionStatus = "demo" | "loading" | "ready" | "anonymous" | "error";
+type ProgressionStatus = "demo" | "loading" | "ready" | "anonymous" | "visitor" | "error";
 type DemoStage = "initial" | "participation" | "staff";
 const demoCredits: CommunityProgressionCredit[] = [
   { campaignId: "demo-campfire", campaignTitle: "ค่ำคืนข้างกองไฟ · ตัวอย่าง", xp: 150, source: "staff", earnedAt: "2026-10-21T19:00:00+07:00" },
@@ -44,9 +44,13 @@ function validSnapshot(value: unknown): value is CommunityProgressionSnapshot {
   });
 }
 
-async function readProgression(signal: AbortSignal): Promise<{ status: "ready"; snapshot: CommunityProgressionSnapshot } | { status: "anonymous" | "error"; snapshot: null }> {
-  const response = await fetch("/api/adventure/progression", { cache: "no-store", credentials: "same-origin", signal });
+export async function readProgression(signal: AbortSignal, request: typeof fetch = fetch): Promise<{ status: "ready"; snapshot: CommunityProgressionSnapshot } | { status: "anonymous" | "visitor" | "error"; snapshot: null }> {
+  const response = await request("/api/adventure/progression", { cache: "no-store", credentials: "same-origin", signal });
   if (response.status === 401) return { status: "anonymous", snapshot: null };
+  if (response.status === 403) {
+    const result: unknown = await response.json();
+    if (result && typeof result === "object" && "code" in result && result.code === "ADVENTURER_REGISTRATION_REQUIRED") return { status: "visitor", snapshot: null };
+  }
   if (!response.ok) return { status: "error", snapshot: null };
   const snapshot: unknown = await response.json();
   if (!validSnapshot(snapshot)) throw new Error("progression-shape");
@@ -66,7 +70,7 @@ export function useAdventureProgression(initialMode: ProgressionMode = "demo", m
 
   const settle = useCallback((result: Awaited<ReturnType<typeof readProgression>>) => {
     setStatus(result.status); setMemberSnapshot(result.snapshot);
-    if (result.status === "error") setError("ยังอ่านบันทึกการเติบโตไม่ได้ ลองใหม่เมื่อบริการพร้อม");
+    setError(result.status === "error" ? "ยังอ่านบันทึกการเติบโตไม่ได้ ลองใหม่เมื่อบริการพร้อม" : "");
   }, []);
 
   useEffect(() => {

@@ -34,6 +34,18 @@
 .badge { flex-shrink: 0; font-size: 10px; color: #8b7242; border: 1px solid #d7c59d; border-radius: 20px; padding: 4px 8px; background: #fbf6e9; }
 .badge[data-passed=true] { color: #48663b; border-color: #acbc9c; background: #eff3e7; }
 .examBody { padding: 18px; }
+.advancement { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid #dfd1b5; }
+.advancement p { margin: 5px 0 0; font-size: 12px; color: #596548; line-height: 1.9; }
+.advancement strong { color: #304a37; font-weight: 600; }
+.questChain { margin: 22px 0; }
+.questChain ol { margin: 0; padding-left: 24px; list-style: decimal; }
+.questChain li { padding: 0 0 16px 5px; font-size: 12px; line-height: 1.9; color: #596548; }
+.questChain li::marker { color: #86662c; font-weight: 650; }
+.questChain li strong { color: #304a37; font-weight: 650; }
+.questChain li p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.questEvidence { color: #746747; }
+.questEvidence span { font-weight: 600; }
+.questNote { margin: 0; font-size: 11px; line-height: 1.9; color: #746747; }
 .objective { font-size: 13px; color: #596548; line-height: 1.9; margin: 0 0 16px; overflow-wrap: anywhere; }
 .requirements { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px; background: #f5f1e5; border-radius: 5px; margin-bottom: 18px; }
 .requirements span { display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: #88744e; }
@@ -57,5 +69,11 @@
 .historyResult strong { color: #536346; font-weight: 600; }
 .historyResult ul { padding-left: 18px; margin: 8px 0 0; font-size: 10px; color: #7c6b48; line-height: 1.8; overflow-wrap: anywhere; }
 .historyResult ul > li { padding: 0; border: 0; border-radius: 0; background: none; }
+.historyQuests { margin-top: 14px; color: #536346; }
+.historyQuests h4 { margin: 0 0 8px; font-size: 11px; font-weight: 600; }
+.historyResult .historyQuests ol { display: block; margin: 0; padding-left: 18px; }
+.historyQuests ol > li { padding: 0 0 10px; border: 0; border-radius: 0; background: none; font-size: 11px; line-height: 1.8; }
+.historyQuests li p { margin: 4px 0; font-size: 11px; overflow-wrap: anywhere; }
+.historyQuests time { color: #7c6b48; font-size: 10px; }
 @media (max-width: 700px) { .filters { grid-template-columns: 1fr; } .requirements { grid-template-columns: 1fr; gap: 8px; } .requirements span { flex-direction: row; flex-wrap: wrap; justify-content: space-between; gap: 8px; } }
 @media (max-width: 600px) { .guide { padding: 20px 15px; } .heading { gap: 12px; } .heading h2 { font-size: 20px; } .heading > div > p:last-child { font-size: 11px; } .seal { font-size: 17px; padding: 8px; } .filters input, .filters select { font-size: 16px; } .skillHeading { align-items: flex-start; flex-direction: column; gap: 7px; } .skillHeading h3 { font-size: 19px; } .statuses > div { padding: 10px; } .statuses span { font-size: 9px; } .statuses strong { font-size: 13px; } .exam summary { gap: 9px; padding: 12px 10px; flex-wrap: wrap; } .grade { width: 34px; min-height: 36px; font-size: 22px; } .examTitle { flex-basis: calc(100% - 70px); } .examTitle strong { font-size: 12px; } .badge { margin-left: 43px; } .exam summary::after { margin-left: auto; } .examBody { padding: 14px 12px; } .criteria li { font-size: 11px; } .examples ol, .evidence p { font-size: 11px; } }

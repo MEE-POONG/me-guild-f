@@ -11,15 +11,16 @@ import { GuildTilt, Motion } from "@/container/public/motion";
 import { endAdventureMemberSession, startAdventureMemberLogin } from "@/lib/adventure-member-login";
 import { memberAuthSwitchHref, type MemberAuthMode } from "@/lib/member-auth-page";
 import type { MemberAuthProvider, MemberLoginStatus } from "@/lib/member-login-status";
+import { registrationHref } from "@/lib/adventurer-registration";
 import styles from "./member-login.module.css";
 
-type MemberLoginProps = Pick<MemberLoginStatus, "configured" | "providers" | "currentProvider" | "linkedProviders" | "discordReady" | "currentDisplayName"> & {
+type MemberLoginProps = Pick<MemberLoginStatus, "configured" | "providers" | "currentProvider" | "linkedProviders" | "discordReady" | "currentDisplayName" | "registration"> & {
   mode?: MemberAuthMode;
   returnTo: string;
   initialError: string | null;
 };
 
-export function AdventureMemberLogin({ mode = "login", configured, providers, linkedProviders, discordReady, returnTo, initialError, currentDisplayName }: MemberLoginProps) {
+export function AdventureMemberLogin({ mode = "login", configured, providers, linkedProviders, discordReady, returnTo, initialError, currentDisplayName, registration }: MemberLoginProps) {
   const register = mode === "register";
   const marketplace = returnTo.split(/[?#]/)[0] === "/adventure/marketplace";
   const raffle = returnTo.split(/[?#]/)[0] === "/adventure/raffles";
@@ -27,6 +28,7 @@ export function AdventureMemberLogin({ mode = "login", configured, providers, li
   const [refreshing, startRefresh] = useTransition();
   const signedIn = currentDisplayName !== null;
   const needsDiscord = signedIn && !discordReady;
+  const needsRegistration = signedIn && registration?.status !== "ADVENTURER";
   const [pending, setPending] = useState<MemberAuthProvider | "signout" | null>(null);
   const [actionResult, setActionResult] = useState<{ error: string | null } | null>(null);
   const error = actionResult === null ? initialError : actionResult.error;
@@ -93,14 +95,16 @@ export function AdventureMemberLogin({ mode = "login", configured, providers, li
         </div>
         <h1 id="member-login-title">{register ? <><span className={styles.headingPhrase}>เริ่มการผจญภัย</span><wbr /><span className={styles.headingPhrase}>ของคุณ</span></> : "ยินดีต้อนรับกลับ"}</h1>
         <p className={styles.intro}>{register
-          ? "มาเป็นส่วนหนึ่งของกิลด์ พบเพื่อนใหม่ และเติบโตไปด้วยกัน"
+          ? "ยืนยันตัวตนและบันทึกข้อมูลจริงเป็นผู้มาเยือน แล้วลงทะเบียนนักผจญภัยหลังเข้าสู่ระบบเพื่อเริ่มเลเวล 1"
           : marketplace ? "กลับมาเปิดกระเป๋า แลกเปลี่ยนกับเพื่อน และติดตามการประมูลของคุณ"
             : raffle ? "กลับมาดูตั๋วของคุณ และร่วมกิจกรรมที่เปิดรับในกิลด์"
               : "กลับมาพบเพื่อนและไปต่อกับการผจญภัยของคุณ"}</p>
 
         {currentDisplayName !== null ? <div className={styles.account}>
           <p>คุณเข้าสู่ระบบอยู่แล้วในชื่อ <strong>{currentDisplayName}</strong></p>
-          {needsDiscord ? <p className={styles.connectNotice}>{linkedProviders.discord ? "ยืนยันสิทธิ์ Discord อีกครั้งเพื่อเปิดกระเป๋าและใช้งานกิจกรรมของกิลด์" : "เชื่อมบัญชี Discord เพื่อเปิดกระเป๋า แลกเปลี่ยน และใช้งานกิจกรรมของกิลด์"}</p> : <Link href={returnTo} className={styles.continue}>ไปต่อด้วยบัญชีนี้ <Arrow /></Link>}
+          {needsRegistration ? <p>ตรวจทะเบียนผู้มาเยือนและลงทะเบียนนักผจญภัยเพื่อเริ่มเลเวล 1</p> : <p>ลงทะเบียนนักผจญภัยแล้ว</p>}
+          <Link href={needsRegistration ? registrationHref(returnTo) : returnTo} className={styles.continue}>{needsRegistration ? "ตรวจทะเบียนและไปต่อ" : "ไปต่อด้วยบัญชีนี้"} <Arrow /></Link>
+          {needsDiscord ? <p className={styles.connectNotice}>{linkedProviders.discord ? "ยืนยันสิทธิ์ Discord อีกครั้งเพื่อเปิดกระเป๋าและใช้งานกิจกรรมของกิลด์" : "เชื่อมบัญชี Discord เพื่อเปิดกระเป๋า แลกเปลี่ยน และใช้งานกิจกรรมของกิลด์"}</p> : null}
           <button type="button" className={styles.signout} onClick={() => authenticate("signout")} disabled={!configured || pending !== null} aria-busy={pending === "signout"}>
             {pending === "signout" ? "กำลังออกจากระบบ…" : "ออกจากระบบสมาชิก"}
           </button>
@@ -116,7 +120,7 @@ export function AdventureMemberLogin({ mode = "login", configured, providers, li
         </button>
         {!providers.google && configured ? <p className={styles.notice}>Google ยังไม่พร้อมใช้งานในขณะนี้</p> : null}
         <p className={styles.notice}>{register
-          ? "เลือก Discord หรือ Google ที่ยืนยันอีเมลแล้ว ระบบจะสร้างบัญชีสมาชิกเมื่อยืนยันตัวตนครั้งแรก"
+          ? "เลือก Discord หรือ Google ที่ยืนยันอีเมลแล้ว บัญชีใหม่จะเริ่มเป็นผู้มาเยือน"
           : signedIn ? "เชื่อมบัญชีเพื่อเข้าสู่สมาชิกคนเดิมได้ทั้งสองช่องทาง" : "เลือก Discord หรือ Google เพื่อเข้าสู่ระบบ"}</p>
 
         {!configured ? <div className={styles.unavailable}>
@@ -136,6 +140,7 @@ export function AdventureMemberLogin({ mode = "login", configured, providers, li
 
         <ul className={styles.benefits}>
           <li><span aria-hidden="true">✓</span> เลือกเข้าสู่ระบบด้วย Discord หรือ Google</li>
+          <li><span aria-hidden="true">✓</span> ลงทะเบียนนักผจญภัยหลังล็อกอิน เริ่มเลเวล 1</li>
           <li><span aria-hidden="true">✓</span> เชื่อม Discord เพื่อใช้กระเป๋าในชุมชน</li>
         </ul>
         <p className={styles.permissions}>Google ใช้ชื่อ อีเมล และรูปโปรไฟล์เพื่อยืนยันตัวตน ส่วน Discord ใช้ข้อมูลบัญชี รายชื่อเซิร์ฟเวอร์ และยศเพื่อยืนยันสิทธิ์ในกิลด์</p>

@@ -10,3 +10,4 @@
 @media(prefers-reduced-motion:reduce){.page progress{scroll-behavior:auto}}
 
 .gradeScale small { font-size: 11px; color: #746448; text-align: center; overflow-wrap: anywhere; }
+.gateActions{display:flex;flex-wrap:wrap;justify-content:center;gap:12px}

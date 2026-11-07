@@ -1,3 +1,5 @@
+import { parseRegistrationSummary, type RegistrationSummary } from "./adventurer-registration";
+
 export type MemberAuthProvider = "discord" | "google";
 export type MemberLoginStatus = {
   configured: boolean;
@@ -7,6 +9,7 @@ export type MemberLoginStatus = {
   linkedProviders: Record<MemberAuthProvider, boolean>;
   discordReady: boolean;
   error: string | null;
+  registration?: RegistrationSummary | null;
 };
 
 export function unavailableMemberLoginStatus(): MemberLoginStatus {
@@ -36,5 +39,6 @@ export function parseMemberLoginStatus(input: unknown): MemberLoginStatus {
     linkedProviders: signedIn ? linkedProviders : { discord: false, google: false },
     discordReady: signedIn && linkedProviders.discord && (data.discordReady === undefined ? currentProvider === "discord" : data.discordReady),
     error: null,
+    ...(data.registration === undefined ? {} : { registration: signedIn && data.registration !== null ? parseRegistrationSummary(data.registration) : null }),
   };
 }

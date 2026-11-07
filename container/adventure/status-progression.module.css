@@ -76,7 +76,8 @@
 .gate > svg, .empty > svg { width: 48px; height: 48px; color: #aa9158; margin-bottom: 17px; }
 .gate h3 { font-size: 21px; font-weight: 500; color: #60734f; line-height: 1.8; }
 .gate p { font-size: 12px; color: #7d7057; line-height: 1.9; margin-top: 9px; }
-.gate button { margin-top: 21px; }
+.gate :is(button, a) { margin-top: 21px; text-decoration: none; }
+.gate a:focus-visible { outline: 3px solid #aa8744; outline-offset: 3px; }
 .empty { padding: 30px 15px; text-align: center; display: grid; justify-items: center; }
 .empty p { font-size: 12px; color: #7d7057; }
 .error { border-left: 2px solid #b28262; color: #945d3f; font-size: 11px; line-height: 1.9; padding: 10px 12px; background: #efe3d72b; margin-bottom: 17px !important; }

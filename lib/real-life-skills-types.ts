@@ -28,6 +28,14 @@ export type RealLifeSkillExamResult = {
   performancePercent: number;
   criteriaPassed: string[];
   samples: { name: string; durationSeconds: number }[];
+  questResults?: { questId: string; completedAt: string; evidence: string }[];
+};
+export type RealLifeSkillAdvancement = {
+  grade: RealLifeSkillGrade;
+  method: "EXAM" | "EXAM_AND_QUEST_CHAIN";
+  prerequisiteGrade: RealLifeSkillGrade | null;
+  requiresReview: true;
+  quests: { id: string; order: number; title: string; objective: string; evidence: string }[];
 };
 export type RealLifeSkillPublicNode = {
   id: string;
@@ -51,6 +59,7 @@ export type RealLifeSkillPublicNode = {
   verifiedGrade?: RealLifeSkillGrade;
   passedExams?: RealLifeSkillExamReceipt[];
   nextExamGrade?: RealLifeSkillGrade | null;
+  advancement?: RealLifeSkillAdvancement[];
 };
 export type RealLifeSkillSnapshot = {
   level: number;
