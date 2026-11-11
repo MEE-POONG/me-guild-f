@@ -10,7 +10,7 @@ test("marketplace proxy allows only board reads and POST with the existing membe
   for (const method of ["DELETE", "PATCH", "PUT"]) assert.equal(allowedAdventureMethod(["marketplace"], method), false);
   for (const path of [["marketplace", "internal"], ["internal", "marketplace"], ["marketplace", "../admin"]]) assert.equal(allowedAdventureMethod(path, "POST"), false);
   let calls = 0;
-  const env = { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: "https://guild.test", ME_GUILD_OFFICE_URL: "https://office.test" };
+  const env = { NODE_ENV: "production", NEXTAUTH_URL: "https://guild.test", ME_GUILD_OFFICE_URL: "https://office.test" };
   const fakeFetch: typeof fetch = async (url, init) => {
     calls++; const headers = new Headers(init?.headers);
     assert.equal(String(url), `${env.ME_GUILD_OFFICE_URL}/api/adventure/marketplace`);
@@ -22,7 +22,7 @@ test("marketplace proxy allows only board reads and POST with the existing membe
   };
   const bad = await proxyAdventureRequest(new Request("https://guild.test/api/adventure/marketplace", { method: "POST", headers: { Origin: "https://evil.test" }, body: "{}" }), ["marketplace"], { env, fetch: fakeFetch });
   assert.equal(bad.status, 403); assert.equal(calls, 0);
-  const valid = await proxyAdventureRequest(new Request("https://guild.test/api/adventure/marketplace", { method: "POST", headers: { Origin: env.ME_GUILD_FRONTEND_URL, "Content-Type": "application/json", Cookie: "me-guild-office.session-token=office; me-guild-member.session-token=member", Authorization: "attacker", "X-Market-Signature": "spoof" }, body: JSON.stringify({ action: "trade.lock", requestId: "stable-request" }) }), ["marketplace"], { env, fetch: fakeFetch });
+  const valid = await proxyAdventureRequest(new Request("https://guild.test/api/adventure/marketplace", { method: "POST", headers: { Origin: env.NEXTAUTH_URL, "Content-Type": "application/json", Cookie: "me-guild-office.session-token=office; me-guild-member.session-token=member", Authorization: "attacker", "X-Market-Signature": "spoof" }, body: JSON.stringify({ action: "trade.lock", requestId: "stable-request" }) }), ["marketplace"], { env, fetch: fakeFetch });
   assert.equal(valid.status, 200); assert.equal(calls, 1);
 });
 

@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Arrow, GuildBrand } from "@/container/public/guild-brand";
 import { parseAdventurerRegistration, registrationHref, type AdventurerRegistration } from "@/lib/adventurer-registration";
 import { memberAuthSwitchHref } from "@/lib/member-auth-page";
+import { memberAccountHref } from "@/lib/member-credentials";
+import { endAdventureMemberSession } from "@/lib/adventure-member-login";
 import styles from "./adventurer-registration.module.css";
 
 type RegistrationState = { kind: "loading" | "anonymous" | "error" } | { kind: "ready"; data: AdventurerRegistration };
 
 export function AdventurerRegistrationForm({ returnTo }: { returnTo: string }) {
+  const router = useRouter();
   const [state, setState] = useState<RegistrationState>({ kind: "loading" });
   const [realName, setRealName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -30,14 +34,32 @@ export function AdventurerRegistrationForm({ returnTo }: { returnTo: string }) {
         if (!response.ok) throw new Error("unavailable");
         const registration = parseAdventurerRegistration(await response.json());
         if (!controller.signal.aborted) {
+          if (registration.status === "ADVENTURER") router.replace(returnTo);
           setState({ kind: "ready", data: registration });
           setRealName(registration.realName ?? "");
           setDisplayName(registration.displayName);
         }
       }).catch(() => { if (!controller.signal.aborted) setState({ kind: "error" }); });
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, returnTo, router]);
   useEffect(() => () => inFlight.current?.abort(), []);
+
+  async function switchAccount() {
+    if (inFlight.current) return;
+    const controller = new AbortController();
+    inFlight.current = controller;
+    setPending(true); setError("");
+    try {
+      const target = new URL(await endAdventureMemberSession({ origin: window.location.origin, fetch, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]) }));
+      target.searchParams.set("returnTo", returnTo);
+      if (!controller.signal.aborted) window.location.assign(target.toString());
+    } catch {
+      if (!controller.signal.aborted) setError("ยังเปลี่ยนบัญชีไม่สำเร็จ กรุณาลองอีกครั้ง");
+    } finally {
+      if (!controller.signal.aborted) setPending(false);
+      if (inFlight.current === controller) inFlight.current = null;
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,23 +96,26 @@ export function AdventurerRegistrationForm({ returnTo }: { returnTo: string }) {
     <header className={styles.header}><GuildBrand /><Link href="/">กลับหน้าหลัก</Link></header>
     <section className={styles.panel} aria-labelledby="registration-title">
       <h1 id="registration-title" ref={heading} tabIndex={-1}>{data?.status === "ADVENTURER" ? "พร้อมออกผจญภัยแล้ว" : data?.profileCompleted ? "ลงทะเบียนนักผจญภัย" : "เริ่มต้นในฐานะผู้มาเยือน"}</h1>
-      <p className={styles.intro}>บันทึกข้อมูลจริงเป็นผู้มาเยือน แล้วเลือกลงทะเบียนนักผจญภัยเพื่อเริ่มเลเวล 1</p>
-      <ol className={styles.steps} aria-label="ขั้นตอนสมัคร">
+      <p className={styles.intro}>{data?.status === "ADVENTURER" ? "ใช้ทะเบียนนักผจญภัยเดิมเพื่อไปต่อ โดยไม่ต้องลงทะเบียนซ้ำ" : "บันทึกข้อมูลจริงเป็นผู้มาเยือน แล้วเลือกลงทะเบียนนักผจญภัยเพื่อเริ่มเลเวล 1"}</p>
+      {data?.status !== "ADVENTURER" ? <ol className={styles.steps} aria-label="ขั้นตอนสมัคร">
         <li aria-current={data && !data.profileCompleted ? "step" : undefined}>ข้อมูลผู้มาเยือน{data?.profileCompleted ? " · บันทึกแล้ว" : ""}</li>
-        <li aria-current={data?.profileCompleted && data.status === "VISITOR" ? "step" : undefined}>นักผจญภัย เลเวล 1{data?.status === "ADVENTURER" ? " · ลงทะเบียนแล้ว" : ""}</li>
-      </ol>
+        <li aria-current={data?.profileCompleted && data.status === "VISITOR" ? "step" : undefined}>นักผจญภัย เลเวล 1</li>
+      </ol> : null}
 
       {state.kind === "loading" ? <p role="status">กำลังตรวจสอบทะเบียนของคุณ…</p> : null}
       {state.kind === "anonymous" ? <div><p>เข้าสู่ระบบเพื่อบันทึกข้อมูลและตรวจสอบว่าคุณลงทะเบียนนักผจญภัยแล้วหรือยัง</p><Link className={styles.primary} href={memberAuthSwitchHref("login", registrationHref(returnTo))}>เข้าสู่ระบบ <Arrow /></Link></div> : null}
       {state.kind === "error" ? <div role="alert"><p>ยังอ่านทะเบียนไม่ได้ กรุณาลองอีกครั้ง</p><button className={styles.primary} onClick={() => { setState({ kind: "loading" }); setAttempt(value => value + 1); }}>ตรวจสอบอีกครั้ง</button></div> : null}
 
       {data?.status === "ADVENTURER" ? <div>
-        <p role="status">{saved ? "ลงทะเบียนนักผจญภัยสำเร็จ คุณเริ่มต้นที่เลเวล 1" : "บัญชีนี้ลงทะเบียนนักผจญภัยแล้ว"}</p>
+        <p role="status">{data.registrationSource === "DISCORD_BOT" ? "พบทะเบียนนักผจญภัยจาก Discord ที่ยืนยันแล้ว กำลังพาไปต่อ…" : saved ? "ลงทะเบียนนักผจญภัยสำเร็จ คุณเริ่มต้นที่เลเวล 1" : "บัญชีนี้ลงทะเบียนนักผจญภัยแล้ว กำลังพาไปต่อ…"}</p>
         <p>ดูระดับปัจจุบันและฝึกทักษะชีวิตจริงตามเกณฑ์สอบหรือเควสต่อเนื่องของแต่ละทักษะ</p>
         <div className={styles.actions}><Link className={styles.primary} href={returnTo}>ไปต่อ <Arrow /></Link><Link href="/adventure/skills">ดูทักษะและระดับของฉัน</Link></div>
+        <p><Link href={memberAccountHref(returnTo)}>ตั้งชื่อผู้ใช้และรหัสผ่าน</Link></p>
       </div> : null}
 
-      {data?.status === "VISITOR" ? <form onSubmit={submit}>
+      {data?.status === "VISITOR" ? <>
+        <div className={styles.existingAccount}><p>เคยลงทะเบียนกับบอทใน Discord แล้ว? <Link href={memberAuthSwitchHref("login", registrationHref(returnTo))}>ยืนยันหรือเชื่อม Discord เพื่อตรวจทะเบียนเดิม</Link></p><p>หากใช้บัญชีเว็บไซต์คนละบัญชี ให้เข้าสู่บัญชีเดิมเพื่อใช้ทะเบียนเดิม โดยไม่ต้องกรอกใหม่</p><button className={styles.secondary} type="button" disabled={pending} onClick={switchAccount}>ออกจากบัญชีนี้ แล้วเข้าสู่บัญชีเดิม</button><p><Link href={memberAccountHref(returnTo)}>ตั้งชื่อผู้ใช้และรหัสผ่านให้บัญชีที่กำลังใช้อยู่</Link> โดยยืนยันอีเมลก่อน</p></div>
+        <form onSubmit={submit}>
         {!data.profileCompleted ? <>
           <p className={styles.status}>สถานะผู้มาเยือน · ยังไม่มีเลเวลนักผจญภัย</p>
           <label className={styles.field} htmlFor="real-name">ชื่อ–นามสกุลจริง<input id="real-name" name="realName" autoComplete="name" required minLength={2} maxLength={120} value={realName} onChange={event => setRealName(event.target.value)} aria-describedby="real-name-help" disabled={pending} /></label>
@@ -105,7 +130,7 @@ export function AdventurerRegistrationForm({ returnTo }: { returnTo: string }) {
           <Link className={styles.secondary} href={returnTo}>สำรวจต่อในฐานะผู้มาเยือน</Link>
         </>}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
-      </form> : null}
+      </form></> : null}
       <footer className={styles.footer}><Link href="/adventure/skills/library">สำรวจอาชีพ ทักษะ และเกณฑ์เลื่อนขั้น <Arrow /></Link></footer>
     </section>
   </main>;

@@ -15,12 +15,12 @@ const features = [
   { title: "กระเป๋าและตลาด", description: "จัดการไอเทมของคุณ สำรวจการแลกเปลี่ยนและรายการประมูลกับเพื่อนร่วมชุมชน", label: "สำรวจตลาด", href: marketplaceUrl, note: "เข้าสู่ระบบเพื่อใช้งาน" },
 ];
 const steps = [
-  { title: "สมัครด้วย Discord", description: "ยืนยันด้วยบัญชี Discord ของคุณ เพื่อสร้างบัญชีสมาชิกในครั้งแรก", icon: FaDiscord },
+  { title: "ยืนยันตัวตนของคุณ", description: "สมัครด้วย Google หรือ Discord ส่วนสมาชิกเดิมเข้าได้ด้วยบัญชีที่เชื่อมไว้ หรือรหัสผ่านที่ตั้งไว้แล้ว", icon: FaDiscord },
   { title: "ทำความรู้จักกิลด์", description: "สำรวจชุมชน อ่านเรื่องที่สนใจ และค้นหามุมที่เป็นตัวคุณ", icon: FiUsers },
   { title: "เลือกการผจญภัยของคุณ", description: "เรียนรู้ทักษะใหม่ ร่วมกิจกรรม หรือเริ่มทำสิ่งที่ชอบไปด้วยกัน", icon: Compass },
 ];
 const questions = [
-  { title: "ต้องมีบัญชี Discord ไหม?", answer: "การสมัครสมาชิกและเข้าสู่ระบบใช้บัญชี Discord ที่ยืนยันอีเมลแล้ว เมื่อยืนยันตัวตนสำเร็จครั้งแรก ระบบจะสร้างบัญชีสมาชิกให้คุณ โดยใช้บัญชีเดียวกับที่ใช้ในชุมชน" },
+  { title: "ต้องมีบัญชี Discord ไหม?", answer: "สมัครด้วย Google หรือ Discord ที่ยืนยันอีเมลแล้วได้ สมาชิกเดิมตั้งชื่อผู้ใช้และรหัสผ่านหลังยืนยันอีเมลได้ ส่วนกระเป๋าและกิจกรรมของกิลด์ยังต้องเชื่อม Discord เพื่อตรวจสิทธิ์" },
   { title: "ยังไม่สมัคร สำรวจอะไรได้บ้าง?", answer: "คุณอ่านข้อมูลแนะนำกิลด์และเปิดคลังอาชีพ ทักษะ และบททดสอบปฏิบัติได้ก่อนสมัคร ส่วนตั๋วของคุณ ผลประเมินทักษะ กระเป๋า และตลาด ต้องเข้าสู่ระบบเพื่อยืนยันตัวตนและสิทธิ์สมาชิก" },
   { title: "สมัครแล้วได้รับตั๋วนำโชคเลยไหม?", answer: "การสมัครหรือเข้าสู่ระบบไม่ได้มอบหรือใช้ตั๋วโดยอัตโนมัติ ตั๋วมาจากกิจกรรมใน Discord และการเข้าร่วมชิงโชคเป็นไปตามเงื่อนไขของแต่ละกิจกรรม" },
 ];
@@ -50,7 +50,7 @@ export function PublicHome() {
             <h1 id="home-title">ทุกการผจญภัย<br /><span>เริ่มต้นที่คนข้าง ๆ</span></h1>
             <p>พื้นที่ของคนรักเกม หนังสือ คอสเพลย์ และการเรียนรู้<br className={styles.desktopBreak} /> มาพบเพื่อน ทำสิ่งที่ชอบ และเติบโตไปด้วยกันใน Me Guild</p>
             <div className={styles.heroActions}><Link href="/register" prefetch={false} className={styles.button}>เริ่มต้นการผจญภัย <Arrow /></Link><a href="#discover" className={styles.outlineButton}>สำรวจกิลด์</a></div>
-            <p className={styles.heroNote}><FaDiscord aria-hidden="true" /> เริ่มต้นด้วยบัญชี Discord ของคุณ</p>
+            <p className={styles.heroNote}><FaDiscord aria-hidden="true" /> เริ่มต้นด้วย Google หรือ Discord</p>
           </div>
         </div>
       </section>
@@ -86,7 +86,7 @@ export function PublicHome() {
           <ol className={styles.steps}>
             {steps.map((step, index) => <li key={step.title} data-reveal><span className={styles.stepIcon}><step.icon aria-hidden="true" /></span><div><span className={styles.stepNumber}>0{index + 1}</span><h3>{step.title}</h3><p>{step.description}</p></div></li>)}
           </ol>
-          <Link href="/register" prefetch={false} className={styles.lightButton}>สมัครสมาชิกด้วย Discord <Arrow /></Link>
+          <Link href="/register" prefetch={false} className={styles.lightButton}>สมัครสมาชิก <Arrow /></Link>
         </div>
       </section>
 

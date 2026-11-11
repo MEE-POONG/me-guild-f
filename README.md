@@ -5,7 +5,7 @@
 | ส่วน | โปรเจกต์ | Local URL |
 | --- | --- | --- |
 | เว็บชุมชน/ผจญภัย/โครงการ/ชิงโชค/ตัวอย่างเครื่อง 3D | `me-guild-f` | http://localhost:3000 |
-| Office, API, member OAuth, Prisma, ตั๋ว และการจัดการรางวัล | `me-guild-b` | http://localhost:3002 |
+| Office, API, member OAuth, Prisma, ตั๋ว และการจัดการรางวัล | `me-guild-b` | http://localhost:3004 |
 | Discord และงานจับ/ส่งรางวัล | `me-guild-bot` | ใช้ระบบเดิม |
 
 ## รันในเครื่อง
@@ -13,23 +13,27 @@
 ```powershell
 cd D:\web\me-guild\me-guild-f
 npm.cmd ci
-if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 npm.cmd run dev
 ```
 
-เปิด http://localhost:3000 เพื่อดูหน้าบ้านก่อนเข้าสู่ระบบ ส่วน API ที่อ่านข้อมูลจริงและ Discord login ต้องให้ `me-guild-b` รันอยู่ด้วย:
+เปิด http://localhost:3000 เพื่อดูหน้าบ้านก่อนเข้าสู่ระบบ ส่วน API ที่อ่านข้อมูลจริงและ Google/Discord login ต้องให้ `me-guild-b` รันอยู่ด้วย:
 
 ```powershell
 cd D:\web\me-guild\me-guild-b
-npm.cmd run dev
+npm.cmd run dev -- --port 3004
 ```
 
-ตั้ง URL ฝั่ง server ใน `.env.local` สองตัว: `ME_GUILD_FRONTEND_URL` สำหรับ F และ `ME_GUILD_OFFICE_URL` สำหรับทั้ง API ของ B และลิงก์ Office โดยไม่คัดลอกกุญแจหรือข้อมูลลับจาก B
+เครื่องนี้มี AG ใช้พอร์ต 3002 อยู่ จึงรัน B ที่ 3004 โดยระบุ `--port 3004` ทุกครั้ง คำสั่ง `npm.cmd run dev` ของ B ยังมีค่าเริ่มต้นเป็น 3002 เปิดทั้งสอง terminal ค้างไว้ และกด Ctrl+C เมื่อต้องการหยุด
+
+ตั้ง URL ฝั่ง server ใน `.env` ของ F สองตัว: `NEXTAUTH_URL=http://localhost:3000` สำหรับ F และ `ME_GUILD_OFFICE_URL=http://localhost:3004` สำหรับทั้ง API ของ B และลิงก์ Office โดยไม่คัดลอกกุญแจหรือข้อมูลลับจาก B ใช้ `http://localhost:3000` เปิดเว็บให้ตรงกับ Origin ที่ตั้งไว้
+
+`.env.local` มีลำดับความสำคัญสูงกว่า `.env`; อย่าใส่ค่าซ้ำโดยไม่ตั้งใจ หลังแก้ env ให้หยุดและเริ่ม dev server ใหม่ ส่วน `npm.cmd start` ใช้ production build และต้องตั้ง HTTPS origins จึงไม่ใช่คำสั่งสำหรับ local HTTP ชุดนี้
 
 ## หน้าบ้านและบัญชีสมาชิก — 1 พฤศจิกายน 2026
 
 - `/` เป็นหน้าแนะนำ Me Guild: ชุมชน กิจกรรม/ตั๋วนำโชค คลังอาชีพและทักษะ ตลาด วิธีเริ่มต้น และ FAQ โดยไม่เรียกข้อมูลส่วนตัวหรือใช้ข่าว/ยอดสมาชิกสาธิตเป็นข้อมูลจริง
-- `/login` และ `/register` ใช้ Discord OAuth เดิมของ B; การยืนยันครั้งแรกสร้างบัญชีสมาชิก ส่วนบัญชีเดิมเข้าสู่บัญชีที่มีอยู่ ไม่มีระบบรหัสผ่านใหม่ใน F
+- `/login` และ `/register` ใช้ Google/Discord OAuth หรือชื่อผู้ใช้/อีเมลและรหัสผ่านสมาชิกของ B; ตั้งหรือกู้คืนรหัสผ่านที่ `/adventure/account` ด้วย OTP ทางอีเมล โดย F ไม่เก็บรหัสผ่านหรือ secret
 - หน้าใหม่กลับไป `/adventure?progression=member` โดยปริยาย; พารามิเตอร์ `returnTo` ต้องผ่าน allowlist และคงอยู่เมื่อสลับ Login/Register
 - `/adventure/login` ยังคงเป็นปลายทาง OAuth error และ signout เดิม โดยใช้หน้าตาเดียวกันและเก็บค่าเริ่มต้นไป `/adventure/raffles`
 - รองรับ loading, สถานะบริการไม่พร้อม/ลองใหม่, OAuth error, บัญชีปัจจุบัน และ pending ระหว่างยืนยันตัวตน
@@ -49,7 +53,7 @@ npm.cmd run dev
 
 ลิงก์สาธารณะ `/adventure/*` บน B ส่งต่อมา F พร้อม path/query เดิม ยกเว้นเวทีจริงของทีมงาน ไฟล์ UI ต้นฉบับใน B ยังเก็บไว้เป็นหลักฐานของการแยกรอบนี้ งานต่อไปของหน้าเว็บสาธารณะให้แก้ใน F
 
-## เชื่อมต่อ API และ Discord
+## เชื่อมต่อ API และ Google/Discord
 
 F ใช้ Route Handler `/api/adventure/[...path]` ส่งต่อเฉพาะ endpoint และ method ที่ระบุใน `lib/backend-proxy.ts` ไม่เปิด proxy ของ Office/API อื่น ตัว bridge ส่งเฉพาะ member cookies รวมถึง cookie chunks, รักษา Set-Cookie แยกแต่ละรายการ, เก็บ Origin เดิม, ไม่ส่ง Office cookies/Authorization/forwarded-host จาก browser และไม่ cache ข้อมูลสมาชิก
 
@@ -59,15 +63,35 @@ B ยังคงตรวจ identity/link/version, Discord membership, สิ�
 
 ```dotenv
 ME_GUILD_FRONTEND_URL=http://localhost:3000
+NEXTAUTH_URL=http://localhost:3004
 ```
 
-Member Discord callback ที่ต้องอนุญาตใน Discord Developer Portal เปลี่ยนเป็น:
+เก็บ `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET` และ `DATABASE_URL` ไว้เฉพาะใน B โดย `NEXTAUTH_SECRET` ต้องยาวอย่างน้อย 32 ตัวอักษร ค่า Google ไม่ใช้ชื่อ `GOOGLE_GOOGLE_*`
+
+Member Discord callback ที่ต้องอนุญาตใน Discord Developer Portal:
 
 ```text
 http://localhost:3000/api/adventure/member-auth/callback/discord
 ```
 
+Member Google callback ที่ต้องเพิ่มใน Google Cloud Console → OAuth client → Authorized redirect URIs:
+
+```text
+http://localhost:3000/api/adventure/member-auth/callback/google
+```
+
+Google Authorized JavaScript origins ใช้ `http://localhost:3000` โดยไม่มี path ส่วน callback ใช้ลำดับ `/member-auth/callback/google` ตามด้านบน ไม่ใช่ `/api/auth/google/callback` สำหรับ production เพิ่ม callback ทั้งสอง provider โดยแทน origin ด้วย `https://me-guild.me-prompt-technology.com` หาก OAuth app อยู่ในสถานะ Testing ให้บัญชีที่ใช้ทดสอบอยู่ใน Test users ของ app ด้วย
+
 Callback ของ Office และ `NEXTAUTH_URL` ของ B ยังคงใช้ origin ของ Office แยกกัน ไม่เปลี่ยนเป็น F และไม่ใช้ wildcard Origin
+
+หากเข้าสู่ Office ที่ `http://localhost:3004/login` ด้วย ให้เพิ่ม Google origin `http://localhost:3004` และ callback ของ Office แยกจากสมาชิก:
+
+| Provider | Office callback ในเครื่อง |
+| --- | --- |
+| Google | `http://localhost:3004/api/auth/google/callback` |
+| Discord | `http://localhost:3004/api/auth/callback/discord` |
+
+Office ยังคงตรวจสิทธิ์ทีมงานและ OTP ทางอีเมลหลัง OAuth จึงต้องตั้งบริการอีเมลของ B ให้พร้อมด้วย การเปิดสมาชิก Google/Discord ไม่ได้ให้สิทธิ์ Office โดยอัตโนมัติ
 
 ## กระเป๋าและตลาด — 30 ตุลาคม 2026
 
@@ -95,7 +119,7 @@ npm.cmd start
 
 Next.js สร้าง standalone output ใน `.next/standalone`; postbuild แนบ `public/` และ `.next/static/` ให้อัตโนมัติ และ `npm.cmd start` เรียก standalone server ตามรูปแบบที่ Next.js รองรับ พอร์ตเริ่มต้น3000 เปลี่ยนด้วย environment `PORT` ได้
 
-Production ตั้ง URL สองตัวอย่างชัดเจนผ่าน environment ของ F: `ME_GUILD_FRONTEND_URL` (HTTPS ของเว็บชุมชน) และ `ME_GUILD_OFFICE_URL` (HTTPS ของ Office ที่ server ของ F และ browser ติดต่อได้) ทั้งคำขอ API ไป B และลิงก์ Office ใช้ `ME_GUILD_OFFICE_URL` ค่าเดียวกัน ตั้ง `ME_GUILD_FRONTEND_URL` บน B ให้ตรงกัน พร้อมเพิ่ม HTTPS member callback ใน Discord Developer Portal ก่อนใช้งานจริง
+Production ตั้ง URL สองตัวอย่างชัดเจนผ่าน environment ของ F: `NEXTAUTH_URL` (HTTPS ของเว็บชุมชน) และ `ME_GUILD_OFFICE_URL` (HTTPS ของ Office ที่ server ของ F และ browser ติดต่อได้) ทั้งคำขอ API ไป B และลิงก์ Office ใช้ `ME_GUILD_OFFICE_URL` ค่าเดียวกัน ตั้ง `ME_GUILD_FRONTEND_URL` บน B ให้ตรงกับ F และคง `NEXTAUTH_URL` ของ B เป็น Office พร้อมเพิ่ม HTTPS member callback ใน Google Cloud Console และ Discord Developer Portal ก่อนใช้งานจริง
 
 ไม่มี DB migration หรือการสร้างผลรางวัลใหม่จากการแยกโปรเจกต์นี้
 
@@ -118,7 +142,11 @@ Container รัน standalone server ด้วยผู้ใช้ `node` ท�
 
 การสมัครผ่าน Discord หรือ Google เริ่มเป็นผู้มาเยือน หลังเข้าสู่ระบบ B ตรวจทะเบียนและพาไป `/adventure/register` โดยเก็บปลายทางเดิมที่อนุญาตไว้ ผู้ใช้บันทึกชื่อจริง (ข้อมูลส่วนตัว) และชื่อที่แสดงในกิลด์ก่อน จากนั้นยืนยันลงทะเบียนนักผจญภัยแยกอีกครั้งจึงเริ่มเลเวล 1 การบันทึกชื่อหรือเข้าสู่ระบบอย่างเดียวไม่เลื่อนสถานะ
 
-หน้าเว็บอ่าน/บันทึกผ่าน GET/POST `/api/adventure/registration` ใน narrow proxy เดิม B ตรวจตัวตน Origin และข้อมูลทุกครั้ง และรองรับการกดยืนยันซ้ำโดยไม่เริ่มระดับใหม่ ชื่อจริงไม่อยู่ในข้อมูลสถานะล็อกอินหรือหน้าสาธารณะ สมาชิกเดิมที่ยังไม่มีทะเบียนต้องทำขั้นตอนนี้ด้วย โดยประวัติและคะแนนทักษะเดิมยังอยู่
+หน้าเว็บอ่าน/บันทึกผ่าน GET/POST `/api/adventure/registration` ใน narrow proxy เดิม B ตรวจตัวตน Origin และข้อมูลทุกครั้ง และรองรับการกดยืนยันซ้ำโดยไม่เริ่มระดับใหม่ ชื่อจริงไม่อยู่ในข้อมูลสถานะล็อกอินหรือหน้าสาธารณะ ประวัติและคะแนนทักษะเดิมยังอยู่
+
+อัปเดต 11 พฤศจิกายน 2026: ถ้าผูก Discord ที่ผ่าน OAuth แล้ว และ B พบทะเบียนบอตที่สมบูรณ์และยังใช้งานตาม Discord ID เดียวกัน เว็บจะข้ามการสมัครซ้ำ (`registrationSource: DISCORD_BOT`) โดยไม่ใช้ชื่อเล่นตัวละครเป็นชื่อจริงและไม่รวมบัญชีจากอีเมลตรงกันเพียงอย่างเดียว บัญชี Google ต้องเชื่อม Discord ของตนก่อน ส่วนสิทธิ์กิจกรรม Discord ยังคงตรวจแยกตามเดิม
+
+ตั้ง username/รหัสผ่านหรือกู้คืนบัญชีเดิมได้ที่ `/adventure/account` หลังยืนยัน OTP อีเมล รหัสผ่านอย่างน้อย 15 ตัวอักษรและไม่เกิน 72 ไบต์ UTF-8 เมื่อเปลี่ยนสำเร็จ session เก่าจะหมดสิทธิ์ ต้องนำ F/B รุ่นนี้ขึ้นพร้อมกัน ดู `me-guild-b/docs/updates/2026-11-11-member-login.md` สำหรับ callback และการแยก Discord production/local
 
 บัญชี Google และ Discord เปิดบันทึกทักษะส่วนตัวได้หลังลงทะเบียน ผู้มาเยือนเห็นปุ่มสมัครแทนข้อมูลเลเวล ส่วนกิจกรรมที่อาศัยสิทธิ์ Discord ยังต้องเชื่อม Discord ตามเดิม เลเวลรวมของนักผจญภัยเริ่มที่ 1 แต่คะแนนทักษะที่ยังไม่ได้ประเมินยังเป็น 0
 

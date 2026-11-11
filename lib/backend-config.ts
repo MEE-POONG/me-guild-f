@@ -1,6 +1,6 @@
 export type BackendEnvironment = {
   NODE_ENV?: string;
-  ME_GUILD_FRONTEND_URL?: string;
+  NEXTAUTH_URL?: string;
   ME_GUILD_OFFICE_URL?: string;
 };
 
@@ -15,7 +15,7 @@ function origin(value: string | undefined, local: string, env: BackendEnvironmen
   } catch { throw new Error("ME_GUILD_CONNECTION_NOT_CONFIGURED"); }
 }
 export function getBackendOrigin(env: BackendEnvironment = process.env): string { return getOfficeOrigin(env); }
-export function getFrontendOrigin(env: BackendEnvironment = process.env): string { return origin(env.ME_GUILD_FRONTEND_URL, "http://localhost:3000", env); }
+export function getFrontendOrigin(env: BackendEnvironment = process.env): string { return origin(env.NEXTAUTH_URL, "http://localhost:3000", env); }
 export function getOfficeOrigin(env: BackendEnvironment = process.env): string { return origin(env.ME_GUILD_OFFICE_URL, "http://localhost:3002", env); }
 
 const memberCookie = /^me-guild-member\.(?:session-token(?:\.\d+)?|csrf-token|callback-url|pkce\.code_verifier|state|nonce|link-intent)=/;

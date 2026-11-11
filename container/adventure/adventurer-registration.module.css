@@ -11,6 +11,12 @@
 .field input { width: 100%; min-height: 48px; border: 1px solid #8c9a8c; border-radius: 7px; padding: 10px 14px; font: inherit; font-weight: 400; color: #244438; background: #fffdf7; caret-color: #244438; }
 .help { margin: 8px 0 0; color: #58665c; font-size: 13px; }
 .status { font-weight: 600; overflow-wrap: anywhere; }
+.existingAccount { padding: 16px 18px; border: 1px solid #c6b999; border-radius: 7px; background: #efecdf; font-size: 14px; overflow-wrap: anywhere; }
+.existingAccount p { margin: 0 0 12px; }
+.existingAccount p:last-child { margin: 16px 0 0; }
+.existingAccount a { text-decoration: underline; text-underline-offset: 4px; }
+.existingAccount button { border: 1px solid #244438; border-radius: 7px; padding: 10px 14px; background: transparent; color: #244438; font: inherit; cursor: pointer; }
+.existingAccount button:disabled { opacity: .6; cursor: default; }
 .consent { display: flex; gap: 12px; align-items: flex-start; padding: 18px 0 4px; cursor: pointer; }
 .consent input { width: 20px; height: 20px; margin-top: 5px; flex-shrink: 0; accent-color: #244438; }
 .primary { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 50px; margin-top: 24px; padding: 12px 22px; border: 1px solid #244438; border-radius: 7px; background: #244438; color: #fffdf5 !important; font: 600 16px var(--font-noto), sans-serif; text-decoration: none; cursor: pointer; }

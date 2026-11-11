@@ -3,7 +3,7 @@ export const ADVENTURE_MEMBER_AUTH_BASE_PATH = "/api/adventure/member-auth";
 export const ADVENTURE_DISCORD_SCOPE = "identify email guilds guilds.members.read";
 export const ADVENTURE_GOOGLE_SCOPE = "openid email profile";
 export type AdventureMemberProvider = "discord" | "google";
-export const ADVENTURE_MEMBER_RETURN_PATHS = ["/adventure", "/adventure/login", "/adventure/register", "/adventure/raffles", "/adventure/skills", "/adventure/marketplace"] as const;
+export const ADVENTURE_MEMBER_RETURN_PATHS = ["/adventure", "/adventure/login", "/adventure/register", "/adventure/account", "/adventure/raffles", "/adventure/skills", "/adventure/marketplace"] as const;
 
 /** Navigation is limited to the selected provider's fixed authorization request. */
 export function adventureMemberProviderRedirect(target: URL, provider: AdventureMemberProvider, origin: string): boolean {

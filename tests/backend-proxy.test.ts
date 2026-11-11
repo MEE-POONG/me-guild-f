@@ -14,7 +14,7 @@ import { ADVENTURE_GOOGLE_SCOPE, adventureMemberRedirect } from "../lib/adventur
 const frontend = "https://community.example.test";
 const backend = "https://office.example.test";
 const campaignId = "aaaaaaaaaaaaaaaaaaaaaaaa";
-const env: BackendEnvironment = { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: frontend, ME_GUILD_OFFICE_URL: backend };
+const env: BackendEnvironment = { NODE_ENV: "production", NEXTAUTH_URL: frontend, ME_GUILD_OFFICE_URL: backend };
 type Call = { url: string; options: RequestInit };
 
 function fixture(handler: (call: Call) => Response | Promise<Response> = () => Response.json({ source: "upstream-fixture" })) {
@@ -44,7 +44,7 @@ test("Office URL alone configures the shared backend and Office origin", () => {
   assert.equal(getBackendOrigin(officeOnly), "https://office.example.test:8443");
   assert.equal(getOfficeOrigin(officeOnly), "https://office.example.test:8443");
   for (const parse of [getBackendOrigin, getOfficeOrigin]) {
-    assert.throws(() => parse({ NODE_ENV: "production", ME_GUILD_FRONTEND_URL: frontend }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+    assert.throws(() => parse({ NODE_ENV: "production", NEXTAUTH_URL: frontend }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
   }
 });
 
@@ -57,18 +57,18 @@ test("origin configuration accepts only explicit root origins and HTTPS outside 
   assert.equal(getOfficeOrigin({ NODE_ENV: "development" }), "http://localhost:3002");
   for (const value of ["", "not-a-url", "javascript:alert(1)", "ftp://example.test", "https://user:password@example.test", "https://example.test/api", "https://example.test/?query=1", "https://example.test/#fragment"]) {
     assert.throws(() => getBackendOrigin({ ...env, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
-    assert.throws(() => getFrontendOrigin({ ...env, ME_GUILD_FRONTEND_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+    assert.throws(() => getFrontendOrigin({ ...env, NEXTAUTH_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
     assert.throws(() => getOfficeOrigin({ ...env, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
   }
   for (const parse of [getBackendOrigin, getFrontendOrigin, getOfficeOrigin]) assert.throws(() => parse({ NODE_ENV: "production" }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
   for (const parse of [getBackendOrigin, getFrontendOrigin, getOfficeOrigin]) {
     for (const value of ["http://localhost:3002", "http://127.0.0.1:3002", "http://[::1]:3002"]) {
-      assert.equal(parse({ NODE_ENV: "development", ME_GUILD_FRONTEND_URL: value, ME_GUILD_OFFICE_URL: value }), value);
-      assert.throws(() => parse({ NODE_ENV: "production", ME_GUILD_FRONTEND_URL: value, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+      assert.equal(parse({ NODE_ENV: "development", NEXTAUTH_URL: value, ME_GUILD_OFFICE_URL: value }), value);
+      assert.throws(() => parse({ NODE_ENV: "production", NEXTAUTH_URL: value, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
     }
     for (const value of ["http://public.example.test", "http://api.internal:3002"]) {
       for (const NODE_ENV of ["production", "development"]) {
-        assert.throws(() => parse({ NODE_ENV, ME_GUILD_FRONTEND_URL: value, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
+        assert.throws(() => parse({ NODE_ENV, NEXTAUTH_URL: value, ME_GUILD_OFFICE_URL: value }), /ME_GUILD_CONNECTION_NOT_CONFIGURED/);
       }
     }
   }
@@ -272,7 +272,7 @@ test("backend auth/errors and HEAD/empty responses keep their real status with p
 });
 
 test("bad configuration and network/abort failures produce private 503 without leaking internals", async () => {
-  for (const badEnv of [{ NODE_ENV: "production" }, { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: frontend }, { ...env, ME_GUILD_OFFICE_URL: "https://user:fixture-password@office.example.test" }, { ...env, ME_GUILD_OFFICE_URL: "http://api.internal:3002" }, { ...env, ME_GUILD_FRONTEND_URL: "http://community.example.test" }]) {
+  for (const badEnv of [{ NODE_ENV: "production" }, { NODE_ENV: "production", NEXTAUTH_URL: frontend }, { ...env, ME_GUILD_OFFICE_URL: "https://user:fixture-password@office.example.test" }, { ...env, ME_GUILD_OFFICE_URL: "http://api.internal:3002" }, { ...env, NEXTAUTH_URL: "http://community.example.test" }]) {
     const f = fixture();
     const response = await proxyAdventureRequest(request(), ["raffles"], { env: badEnv, fetch: f.fetcher });
     privateResponse(response, 503); assert.equal(f.calls.length, 0); assert.equal((await response.json()).code, "GUILD_BACKEND_UNAVAILABLE");

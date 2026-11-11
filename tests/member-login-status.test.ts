@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseMemberLoginStatus, unavailableMemberLoginStatus } from "../lib/member-login-status";
 
-const google = { configured: true, currentDisplayName: "สมาชิก Google", providers: { discord: true, google: true }, currentProvider: "google", linkedProviders: { discord: false, google: true }, discordReady: false };
+const google = { configured: true, currentDisplayName: "สมาชิก Google", providers: { discord: true, google: true, credentials: true }, currentProvider: "google", linkedProviders: { discord: false, google: true }, discordReady: false };
 
 test("Google member status exposes only provider availability and account-link state", () => {
   assert.deepEqual(parseMemberLoginStatus({ ...google, accessToken: "must-not-reach-browser", email: "private@example.test" }), { ...google, error: null });
@@ -20,14 +20,14 @@ test("Discord readiness requires a signed-in member and a linked Discord account
 
 test("an older Discord-only backend does not enable Google by assumption", () => {
   const status = parseMemberLoginStatus({ configured: true, currentDisplayName: "สมาชิก Discord" });
-  assert.deepEqual(status.providers, { discord: true, google: false });
+  assert.deepEqual(status.providers, { discord: true, google: false, credentials: false });
   assert.equal(status.currentProvider, "discord");
   assert.equal(status.discordReady, true);
 });
 
 test("unconfigured auth disables every provider and removes member state", () => {
   const status = parseMemberLoginStatus({ ...google, configured: false });
-  assert.deepEqual(status.providers, { discord: false, google: false });
+  assert.deepEqual(status.providers, { discord: false, google: false, credentials: false });
   assert.equal(status.currentDisplayName, null);
   assert.equal(status.currentProvider, null);
   assert.equal(status.discordReady, false);
@@ -35,7 +35,16 @@ test("unconfigured auth disables every provider and removes member state", () =>
 });
 
 test("malformed provider status fails closed", () => {
-  for (const data of [null, [], {}, { ...google, providers: { google: true } }, { ...google, linkedProviders: { google: "yes", discord: true } }, { ...google, currentProvider: "office" }, { ...google, discordReady: "yes" }, { ...google, currentDisplayName: "x".repeat(121) }]) {
+  for (const data of [null, [], {}, { ...google, providers: { google: true } }, { ...google, providers: { ...google.providers, credentials: "yes" } }, { ...google, linkedProviders: { google: "yes", discord: true } }, { ...google, currentProvider: "office" }, { ...google, discordReady: "yes" }, { ...google, currentDisplayName: "x".repeat(121) }]) {
     assert.throws(() => parseMemberLoginStatus(data), /INVALID_MEMBER_STATUS/);
   }
+});
+
+test("password sign-in preserves explicit linked OAuth state without inferring Discord readiness", () => {
+  const status = parseMemberLoginStatus({ ...google, currentProvider: "credentials", passwordHash: "private" });
+  assert.equal(status.currentProvider, "credentials");
+  assert.equal(status.providers.credentials, true);
+  assert.deepEqual(status.linkedProviders, { google: true, discord: false });
+  assert.equal(status.discordReady, false);
+  assert.equal("passwordHash" in status, false);
 });

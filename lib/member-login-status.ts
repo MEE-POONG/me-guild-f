@@ -4,8 +4,8 @@ export type MemberAuthProvider = "discord" | "google";
 export type MemberLoginStatus = {
   configured: boolean;
   currentDisplayName: string | null;
-  providers: Record<MemberAuthProvider, boolean>;
-  currentProvider: MemberAuthProvider | null;
+  providers: Record<MemberAuthProvider | "credentials", boolean>;
+  currentProvider: MemberAuthProvider | "credentials" | null;
   linkedProviders: Record<MemberAuthProvider, boolean>;
   discordReady: boolean;
   error: string | null;
@@ -13,7 +13,7 @@ export type MemberLoginStatus = {
 };
 
 export function unavailableMemberLoginStatus(): MemberLoginStatus {
-  return { configured: false, currentDisplayName: null, providers: { discord: false, google: false }, currentProvider: null, linkedProviders: { discord: false, google: false }, discordReady: false, error: "ยังเชื่อมต่อระบบสมาชิกไม่สำเร็จ กรุณาลองใหม่ภายหลัง" };
+  return { configured: false, currentDisplayName: null, providers: { discord: false, google: false, credentials: false }, currentProvider: null, linkedProviders: { discord: false, google: false }, discordReady: false, error: "ยังเชื่อมต่อระบบสมาชิกไม่สำเร็จ กรุณาลองใหม่ภายหลัง" };
 }
 
 /** Provider availability is public; no provider credential or session token belongs in this DTO. */
@@ -28,13 +28,15 @@ export function parseMemberLoginStatus(input: unknown): MemberLoginStatus {
   }
   const signedIn = data.configured && data.currentDisplayName !== null;
   const providers = flags(data.providers, { discord: data.configured, google: false });
+  const credentials = data.providers && typeof data.providers === "object" && "credentials" in data.providers ? data.providers.credentials : false;
+  if (typeof credentials !== "boolean") throw new Error("INVALID_MEMBER_STATUS");
   const linkedProviders = flags(data.linkedProviders, { discord: signedIn, google: false });
   const currentProvider = data.currentProvider === undefined ? signedIn ? "discord" : null : data.currentProvider;
-  if (currentProvider !== null && currentProvider !== "discord" && currentProvider !== "google" || data.discordReady !== undefined && typeof data.discordReady !== "boolean") throw new Error("INVALID_MEMBER_STATUS");
+  if (currentProvider !== null && currentProvider !== "discord" && currentProvider !== "google" && currentProvider !== "credentials" || data.discordReady !== undefined && typeof data.discordReady !== "boolean") throw new Error("INVALID_MEMBER_STATUS");
   return {
     configured: data.configured,
     currentDisplayName: signedIn ? data.currentDisplayName as string : null,
-    providers: data.configured ? providers : { discord: false, google: false },
+    providers: data.configured ? { ...providers, credentials } : { discord: false, google: false, credentials: false },
     currentProvider: signedIn ? currentProvider : null,
     linkedProviders: signedIn ? linkedProviders : { discord: false, google: false },
     discordReady: signedIn && linkedProviders.discord && (data.discordReady === undefined ? currentProvider === "discord" : data.discordReady),

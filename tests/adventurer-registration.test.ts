@@ -4,8 +4,8 @@ import { parseAdventurerRegistration, parseRegistrationSummary, registrationHref
 import { parseMemberLoginStatus } from "../lib/member-login-status";
 import { allowedAdventureMethod, proxyAdventureRequest } from "../lib/backend-proxy";
 
-const visitor = { status: "VISITOR", profileCompleted: false, realName: null, displayName: "สมาชิก", visitorRegisteredAt: null, adventurerRegisteredAt: null, startingLevel: 0 };
-const registered = { ...visitor, status: "ADVENTURER", profileCompleted: true, realName: "สมาชิก ทดสอบ", visitorRegisteredAt: "2026-11-04T01:00:00Z", adventurerRegisteredAt: "2026-11-04T01:01:00Z", startingLevel: 1 };
+const visitor = { status: "VISITOR", profileCompleted: false, realName: null, displayName: "สมาชิก", visitorRegisteredAt: null, adventurerRegisteredAt: null, startingLevel: 0, registrationSource: null };
+const registered = { ...visitor, status: "ADVENTURER", profileCompleted: true, realName: "สมาชิก ทดสอบ", visitorRegisteredAt: "2026-11-04T01:00:00Z", adventurerRegisteredAt: "2026-11-04T01:01:00Z", startingLevel: 1, registrationSource: "WEB" };
 
 test("registration states require persisted profile and registration before displaying level one", () => {
   assert.deepEqual(parseAdventurerRegistration(visitor), visitor);
@@ -13,6 +13,16 @@ test("registration states require persisted profile and registration before disp
   for (const input of [{ ...visitor, startingLevel: 1 }, { ...registered, profileCompleted: false }, { ...registered, adventurerRegisteredAt: null }, { ...registered, realName: "" }, { ...registered, visitorRegisteredAt: "invalid" }]) {
     assert.throws(() => parseAdventurerRegistration(input), /INVALID_REGISTRATION/);
   }
+});
+
+test("verified Discord bot registration can retain a character name without inventing a real-name profile", () => {
+  const bot = { ...visitor, status: "ADVENTURER", displayName: "Character name", adventurerRegisteredAt: "2026-11-04T01:01:00Z", startingLevel: 1, registrationSource: "DISCORD_BOT" };
+  assert.deepEqual(parseAdventurerRegistration(bot), bot);
+  assert.equal(parseRegistrationSummary(bot).profileCompleted, false);
+  for (const input of [{ ...bot, registrationSource: "WEB" }, { ...bot, registrationSource: null }, { ...bot, registrationSource: "discord" }, { ...bot, registrationSource: undefined }, { ...bot, adventurerRegisteredAt: null }, { ...bot, realName: "Character name" }, { ...bot, visitorRegisteredAt: bot.adventurerRegisteredAt }, { ...visitor, registrationSource: "DISCORD_BOT" }]) {
+    assert.throws(() => parseAdventurerRegistration(input), /INVALID_REGISTRATION/);
+  }
+  assert.equal(parseAdventurerRegistration({ ...registered, registrationSource: undefined }).registrationSource, "WEB");
 });
 
 test("status summary excludes private registration data and anonymous accounts expose no registration", () => {
@@ -37,7 +47,7 @@ test("onboarding keeps allowed deep links and removes external destinations and 
 
 test("registration transport permits only its exact endpoint and retains origin and member-cookie guards", async () => {
   const frontend = "https://community.test", backend = "https://office.test";
-  const env = { NODE_ENV: "production", ME_GUILD_FRONTEND_URL: frontend, ME_GUILD_OFFICE_URL: backend };
+  const env = { NODE_ENV: "production", NEXTAUTH_URL: frontend, ME_GUILD_OFFICE_URL: backend };
   let calls = 0;
   const fetcher: typeof fetch = async (url, init) => {
     calls += 1;
